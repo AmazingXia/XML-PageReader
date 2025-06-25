@@ -3,54 +3,22 @@
     <!-- 文件上传区域 -->
     <div v-if="!currentContent" class="upload-area">
       <div class="upload-container">
-        <h2>XML 多页阅读器</h2>
-        <p>请选择 XML 文件或从示例文件中选择</p>
+        <h2>XML 文件夹阅读器</h2>
+        <p>请选择 XML 文件夹进行预览</p>
 
         <div class="upload-buttons">
           <input
-            ref="fileInput"
+            ref="folderInput"
             type="file"
-            accept=".xml"
-            @change="handleFileUpload"
+            webkitdirectory
+            directory
+            multiple
+            @change="handleFolderUpload"
             style="display: none"
           />
-          <button @click="$refs.fileInput.click()" class="upload-btn">
-            选择 XML 文件
+          <button @click="$refs.folderInput.click()" class="upload-btn">
+            选择 XML 文件夹
           </button>
-        </div>
-
-        <!-- 示例文件列表 -->
-        <div class="sample-files">
-          <h3>示例文件</h3>
-          <div class="file-list">
-            <div class="file-group">
-              <h4>文件夹 1-xml</h4>
-              <div class="file-items">
-                <button
-                  v-for="file in sampleFiles1"
-                  :key="file.path"
-                  @click="loadSampleFile(file)"
-                  class="file-item"
-                >
-                  {{ file.name }}
-                </button>
-              </div>
-            </div>
-
-            <div class="file-group">
-              <h4>文件夹 2-xml</h4>
-              <div class="file-items">
-                <button
-                  v-for="file in sampleFiles2"
-                  :key="file.path"
-                  @click="loadSampleFile(file)"
-                  class="file-item"
-                >
-                  {{ file.name }}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -60,13 +28,18 @@
       <!-- 顶部信息栏 -->
       <div class="info-bar">
         <div class="file-info">
-          <span class="file-name">{{ currentFileName }}</span>
-          <button @click="resetReader" class="reset-btn">返回文件选择</button>
+          <span class="file-name">{{ currentFolderName }}</span>
+          <button @click="resetReader" class="reset-btn">返回文件夹选择</button>
         </div>
       </div>
       <!-- 页面查看器 -->
       <div class="page-viewer-wrapper">
-        <PageViewer :content="currentContent" />
+        <PageViewer
+          :content="currentContent"
+          :xml-base-path="currentXmlBasePath"
+          :xml-file-count="currentXmlFileCount"
+          :start-file-index="currentStartFileIndex"
+        />
       </div>
     </div>
   </div>
@@ -74,7 +47,6 @@
 
 <script>
 import PageViewer from '@/components/PageViewer.vue'
-import { XMLParser } from '@/utils/xmlParser'
 
 export default {
   name: 'XmlReader',
@@ -84,94 +56,84 @@ export default {
   data() {
     return {
       currentContent: '',
-      currentFileName: '',
-      sampleFiles1: [],
-      sampleFiles2: []
+      currentFolderName: '',
+      currentXmlBasePath: '',
+      currentXmlFileCount: 0,
+      currentStartFileIndex: 2,
+      fileMap: {} // 存储文件夹中的所有文件
     }
-  },
-  mounted() {
-    this.loadSampleFiles()
   },
   methods: {
     /**
-     * 加载示例文件列表
+     * 处理文件夹上传
      */
-    loadSampleFiles() {
-      try {
-        // 这里应该从服务器获取文件列表
-        // 由于是静态文件，我们手动构建文件列表
-        this.sampleFiles1 = this.generateFileList('1-xml', 12)
-        this.sampleFiles2 = this.generateFileList('2-xml', 55)
-      } catch (error) {
-        console.error('加载示例文件失败:', error)
-      }
-    },
-
-    /**
-     * 生成文件列表
-     */
-    generateFileList(folder, maxFiles) {
-      const files = []
-      for (let i = 2; i <= maxFiles; i++) {
-        files.push({
-          name: `文件 ${i}`,
-          path: `${folder}/${i}/result.xml`,
-          prefix: `${folder}/${i}/`
-        })
-      }
-
-      console.log(`files`, files);
-
-      return files;
-    },
-
-    /**
-     * 处理文件上传
-     */
-    async handleFileUpload(event) {
-      const file = event.target.files[0]
-      if (!file) return
+    async handleFolderUpload(event) {
+      const files = Array.from(event.target.files)
+      if (files.length === 0) return
 
       try {
-        const parsedData = await XMLParser.parseFile(file)
-        const htmlContent = XMLParser.toHTML(parsedData)
+        // 创建文件映射
+        this.fileMap = {}
+        files.forEach(f => this.fileMap[f.webkitRelativePath] = f)
 
-        this.currentContent = htmlContent
-        this.currentFileName = file.name
+        // 获取文件夹根目录名称
+        const folderName = files[0].webkitRelativePath.split('/')[0]
+        this.currentFolderName = folderName
+
+        // 初始化阅读器
+        await this.initializeFolderReader(folderName, files)
 
         // 清空文件输入
-        this.$refs.fileInput.value = ''
+        this.$refs.folderInput && (this.$refs.folderInput.value = '')
       } catch (error) {
-        console.error('文件解析失败:', error)
-        alert('文件解析失败，请检查文件格式')
+        console.error('文件夹处理失败:', error)
+        alert('文件夹处理失败，请检查文件夹格式')
       }
     },
 
     /**
-     * 加载示例文件
+     * 初始化文件夹阅读器
      */
-    async loadSampleFile(file) {
+    async initializeFolderReader(folderName, files) {
       try {
-        const response = await fetch(file.path)
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const xmlContent = await response.text()
-        console.log(`file.prefix`, file.prefix);
-
-        const parsedData = XMLParser.parse(xmlContent, file.prefix)
-
-        // console.log(`parsedData`, parsedData);
-
-        // 直接存储解析对象，便于分页
-        this.currentContent = parsedData
-        this.currentFileName = file.name
-        return parsedData
+        // 处理上传的文件夹
+        await this.processUploadedFolder(folderName, files)
       } catch (error) {
-        console.error('加载示例文件失败:', error)
-        alert('加载示例文件失败，请检查文件路径')
+        console.error('初始化文件夹阅读器失败:', error)
+        throw error
       }
+    },
+
+    /**
+     * 处理上传的文件夹
+     */
+    async processUploadedFolder(folderName, files) {
+      const folderRoots = new Set()
+
+      // 兼容只上传子文件夹或多级文件夹
+      files.forEach(file => {
+        const parts = file.webkitRelativePath.split("/")
+        if (parts.length >= 3) {
+          folderRoots.add(`${parts[0]}/${parts[1]}`)
+        } else if (parts.length === 2) {
+          folderRoots.add(`${parts[0]}`)
+        }
+      })
+
+      // 设置文件数量
+      this.currentXmlFileCount = folderRoots.size
+      this.currentXmlBasePath = folderName
+      this.currentStartFileIndex = 2
+
+      // 创建内容对象
+      this.currentContent = {
+        type: 'folder',
+        folderName: folderName,
+        fileMap: this.fileMap,
+        folderRoots: Array.from(folderRoots)
+      }
+
+      console.log(`currentContent`, this.currentContent)
     },
 
     /**
@@ -179,7 +141,11 @@ export default {
      */
     resetReader() {
       this.currentContent = ''
-      this.currentFileName = ''
+      this.currentFolderName = ''
+      this.currentXmlBasePath = ''
+      this.currentXmlFileCount = 0
+      this.currentStartFileIndex = 2
+      this.fileMap = {}
     }
   }
 }
@@ -195,6 +161,8 @@ export default {
   justify-content: center;
   align-items: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-width: 100vw;
 }
 
 .upload-container {
@@ -207,6 +175,7 @@ export default {
   width: 90%;
   position: relative;
   z-index: 10;
+  margin: auto;
 }
 
 .upload-container h2, .upload-container p {
@@ -243,87 +212,39 @@ export default {
   transform: translateY(-2px);
 }
 
-.sample-files {
-  text-align: left;
-}
-
-.sample-files h3 {
-  color: #333;
-  margin-bottom: 20px;
-  text-align: center;
-  font-size: 20px;
-}
-
-.file-group {
-  margin-bottom: 25px;
-}
-
-.file-group h4 {
-  color: #555;
-  margin-bottom: 10px;
-  font-size: 16px;
-  border-bottom: 2px solid #667eea;
-  padding-bottom: 5px;
-}
-
-.file-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
-}
-
-.file-item {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 14px;
-  text-align: center;
-}
-
-.file-item:hover {
-  background: #667eea;
-  color: white;
-  border-color: #667eea;
-}
-
 .reader-interface {
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
   height: 100vh;
 }
 
 .info-bar {
-  background: #fff;
-  min-height: min-content;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: white;
   border-bottom: 1px solid #e0e0e0;
-  padding: 10px 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  flex: none;
 }
 
 .file-info {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 20px;
 }
 
 .file-name {
-  font-weight: bold;
-  color: #333;
   font-size: 16px;
+  font-weight: 500;
+  color: #333;
 }
 
 .reset-btn {
-  background: #dc3545;
+  background: #667eea;
   color: white;
   border: none;
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -331,35 +252,11 @@ export default {
 }
 
 .reset-btn:hover {
-  background: #c82333;
+  background: #5a6fd8;
 }
 
 .page-viewer-wrapper {
-  flex: 1 1 0%;
-  min-height: 0;
-  display: flex;
+  flex: 1;
   overflow: hidden;
-  flex-direction: column;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .upload-container {
-    padding: 20px;
-    margin: 20px;
-  }
-
-  .upload-container h2 {
-    font-size: 24px;
-  }
-
-  .file-items {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  }
-
-  .file-item {
-    font-size: 12px;
-    padding: 6px 8px;
-  }
 }
 </style>

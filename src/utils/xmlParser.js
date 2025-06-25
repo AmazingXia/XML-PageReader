@@ -61,9 +61,11 @@ export class XMLParser {
   /**
    * 将解析后的对象转换为 HTML
    * @param {Object} parsedData - 解析后的数据
+   * @param {string} prefix - 图片前缀
+   * @param {Object} fileMap - 文件映射（用于文件夹模式）
    * @returns {string} HTML 字符串
    */
-  static toHTML(parsedData) {
+  static toHTML(parsedData, prefix = '', fileMap = null) {
     if (!parsedData) return ''
 
     let html = ''
@@ -77,7 +79,7 @@ export class XMLParser {
     if (parsedData.tagName === 'body') {
       html += '<div class="article-body">'
       parsedData.children.forEach(child => {
-        html += this.toHTML(child)
+        html += this.toHTML(child, prefix, fileMap)
       })
       html += '</div>'
     }
@@ -90,7 +92,7 @@ export class XMLParser {
       // 先处理image
       const imageChild = parsedData.children.find(child => child.tagName === 'image')
       if (imageChild) {
-        html += this.toHTML(imageChild)
+        html += this.toHTML(imageChild, prefix, fileMap)
       }
 
       // 再处理title（作为figcaption）
@@ -111,7 +113,20 @@ export class XMLParser {
       // 根据placement属性决定样式类
       const placementClass = placement === 'break' ? 'image-break' : 'image-inline'
 
-      html += `<img src="${this.prefix}/${src}" alt="${alt}" class="article-image ${placementClass}" />`
+      // 处理图片路径
+      let imageSrc = src
+      if (prefix) {
+        imageSrc = `${prefix}/${src}`
+      }
+
+      // 如果是文件夹模式且有文件映射，创建blob URL
+      if (fileMap && fileMap[imageSrc]) {
+        const file = fileMap[imageSrc]
+        const blobUrl = URL.createObjectURL(file)
+        imageSrc = blobUrl
+      }
+
+      html += `<img src="${imageSrc}" alt="${alt}" class="article-image ${placementClass}" />`
     }
 
     // 处理 p
@@ -128,7 +143,7 @@ export class XMLParser {
     // 递归处理其它子节点
     if (!['body', 'figure', 'image', 'p', 'h1', 'h2', 'h3', 'title'].includes(parsedData.tagName)) {
       parsedData.children.forEach(child => {
-        html += this.toHTML(child)
+        html += this.toHTML(child, prefix, fileMap)
       })
     }
 
