@@ -64,9 +64,10 @@
           <button @click="resetReader" class="reset-btn">返回文件选择</button>
         </div>
       </div>
-
       <!-- 页面查看器 -->
-      <PageViewer :content="currentContent" />
+      <div class="page-viewer-wrapper">
+        <PageViewer :content="currentContent" />
+      </div>
     </div>
   </div>
 </template>
@@ -88,14 +89,14 @@ export default {
       sampleFiles2: []
     }
   },
-  async mounted() {
-    await this.loadSampleFiles()
+  mounted() {
+    this.loadSampleFiles()
   },
   methods: {
     /**
      * 加载示例文件列表
      */
-    async loadSampleFiles() {
+    loadSampleFiles() {
       try {
         // 这里应该从服务器获取文件列表
         // 由于是静态文件，我们手动构建文件列表
@@ -114,7 +115,8 @@ export default {
       for (let i = 2; i <= maxFiles; i++) {
         files.push({
           name: `文件 ${i}`,
-          path: `${folder}/${i}/result.xml`
+          path: `${folder}/${i}/result.xml`,
+          prefix: `${folder}/${i}/`
         })
       }
 
@@ -156,11 +158,16 @@ export default {
         }
 
         const xmlContent = await response.text()
-        const parsedData = XMLParser.parse(xmlContent)
-        const htmlContent = XMLParser.toHTML(parsedData)
+        console.log(`file.prefix`, file.prefix);
 
-        this.currentContent = htmlContent
+        const parsedData = XMLParser.parse(xmlContent, file.prefix)
+
+        // console.log(`parsedData`, parsedData);
+
+        // 直接存储解析对象，便于分页
+        this.currentContent = parsedData
         this.currentFileName = file.name
+        return parsedData
       } catch (error) {
         console.error('加载示例文件失败:', error)
         alert('加载示例文件失败，请检查文件路径')
@@ -180,12 +187,10 @@ export default {
 
 <style scoped>
 .reader {
-  height: 100vh;
-  overflow: hidden;
+
 }
 
 .upload-area {
-  height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -200,16 +205,20 @@ export default {
   text-align: center;
   max-width: 600px;
   width: 90%;
+  position: relative;
+  z-index: 10;
+}
+
+.upload-container h2, .upload-container p {
+  color: #222;
 }
 
 .upload-container h2 {
-  color: #333;
   margin-bottom: 10px;
   font-size: 28px;
 }
 
 .upload-container p {
-  color: #666;
   margin-bottom: 30px;
   font-size: 16px;
 }
@@ -281,16 +290,21 @@ export default {
 }
 
 .reader-interface {
-  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  height: 100vh;
 }
 
 .info-bar {
   background: #fff;
+  min-height: min-content;
   border-bottom: 1px solid #e0e0e0;
   padding: 10px 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex: none;
 }
 
 .file-info {
@@ -318,6 +332,14 @@ export default {
 
 .reset-btn:hover {
   background: #c82333;
+}
+
+.page-viewer-wrapper {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
 }
 
 /* 响应式设计 */

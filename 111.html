@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <title>XML Folder Viewer</title>
+</head>
+
+<body>
+  <h1>上传XML文件夹</h1>
+  <input type="file" id="folderInput" webkitdirectory directory multiple />
+  <div id="output"></div>
+
+  <script>
+    const folderInput = document.getElementById("folderInput");
+    const output = document.getElementById("output");
+    folderInput.addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files);
+      const fileMap = {};
+
+      files.forEach(f => fileMap[f.webkitRelativePath] = f);
+
+      console.log("全部文件路径:");
+      files.forEach(f => console.log(f.webkitRelativePath));
+
+      const folderRoots = new Set();
+
+      files.forEach(file => {
+        const parts = file.webkitRelativePath.split("/");
+        if (parts.length >= 3) {
+          folderRoots.add(`${parts[0]}/${parts[1]}`);
+        }
+      });
+
+      console.log("有效子目录：", folderRoots);
+
+      for (const folder of folderRoots) {
+        const xmlPath = `${folder}/result.xml`;
+        const xmlFile = fileMap[xmlPath];
+        if (!xmlFile) {
+          console.warn("未找到xml文件:", xmlPath);
+          continue;
+        }
+
+        const xmlText = await xmlFile.text();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+
+        const title = xmlDoc.querySelector("title")?.textContent || "无标题";
+        const section = document.createElement("section");
+        section.innerHTML = `<h2>📄 ${folder}: ${title}</h2>`;
+
+        xmlDoc.querySelectorAll("body > p").forEach(p => {
+          const para = document.createElement("p");
+          para.textContent = p.textContent;
+          section.appendChild(para);
+        });
+
+        xmlDoc.querySelectorAll("figure").forEach(fig => {
+          const figTitle = fig.querySelector("title")?.textContent || "";
+          const imgSrc = fig.querySelector("image")?.getAttribute("href") || "";
+          const altText = fig.querySelector("alt")?.textContent || "";
+          const fullImgPath = `${folder}/${imgSrc}`;
+          const imgFile = fileMap[fullImgPath];
+
+          if (imgFile) {
+            const imgURL = URL.createObjectURL(imgFile);
+            const img = document.createElement("img");
+            img.src = imgURL;
+            img.alt = altText;
+            img.style.maxWidth = "100%";
+
+            const caption = document.createElement("figcaption");
+            caption.textContent = figTitle;
+
+            const figure = document.createElement("figure");
+            figure.appendChild(img);
+            figure.appendChild(caption);
+            section.appendChild(figure);
+          } else {
+            console.warn("未找到图片文件:", fullImgPath);
+          }
+        });
+
+        output.appendChild(section);
+      }
+    });
+
+  </script>
+</body>
+
+</html>

@@ -43,23 +43,25 @@
 
     <!-- 页面容器 -->
     <div
-      class="page-container"
-      :class="{
-        'fullscreen': isFullscreen,
-        'night-mode': isNightMode
-      }"
-      @keydown="handleKeydown"
-      tabindex="0"
-    >
-      <div
-        v-if="pages.length > 0"
-        class="page-content"
-        v-html="pages[currentPage].content"
-      ></div>
-      <div v-else class="no-content">
-        <p>暂无内容</p>
-      </div>
-    </div>
+        class="page-container"
+        :class="{
+          'fullscreen': isFullscreen,
+          'night-mode': isNightMode
+        }"
+        @keydown="handleKeydown"
+        tabindex="0"
+      >
+       <div class="page">
+         <div
+           v-if="pages.length > 0"
+           class="page-content"
+           v-html="pages[currentPage].content"
+         ></div>
+         <div v-else class="no-content">
+           <p>暂无内容</p>
+         </div>
+       </div>
+     </div>
   </div>
 </template>
 
@@ -70,7 +72,7 @@ export default {
   name: 'PageViewer',
   props: {
     content: {
-      type: String,
+      type: [String, Object],
       default: ''
     }
   },
@@ -135,7 +137,7 @@ export default {
       if (this.isNightMode) {
         const nightModeStyles = `
           .page-container.night-mode {
-            background: #1a1a1a !important;
+            background: #23272f !important;
           }
           .page-container.night-mode .page {
             background: #2d2d2d !important;
@@ -220,7 +222,7 @@ export default {
      * 请求全屏
      */
     requestFullscreen() {
-      const container = this.$el.querySelector('.page-container')
+      const container = document.documentElement
       if (container.requestFullscreen) {
         container.requestFullscreen()
       } else if (container.webkitRequestFullscreen) {
@@ -234,12 +236,22 @@ export default {
      * 退出全屏
      */
     exitFullscreen() {
-      if (document.exitFullscreen) {
-        document.exitFullscreen()
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen()
-      } else if (document.msExitFullscreen) {
-        document.msExitFullscreen()
+      try {
+        if (
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.msFullscreenElement
+        ) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen()
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen()
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen()
+          }
+        }
+      } catch (error) {
+        // pass
       }
     },
 
@@ -255,6 +267,7 @@ export default {
      * 处理键盘事件
      */
     handleKeydown(event) {
+      console.log(event.key)
       switch (event.key) {
         case 'ArrowLeft':
         case 'PageUp':
@@ -282,6 +295,10 @@ export default {
             this.toggleFullscreen()
           }
           break
+        case 'Escape':
+          this.isFullscreen = false;
+          this.exitFullscreen();
+          break
       }
     },
 
@@ -302,12 +319,14 @@ export default {
 
 <style scoped>
 .page-viewer {
-  height: 100vh;
+  flex: 1;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .toolbar {
+  flex: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -315,7 +334,6 @@ export default {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 100;
 }
 
 .toolbar-left,
@@ -371,13 +389,14 @@ export default {
   outline: none;
 }
 
+
 .page-container.fullscreen {
-  position: fixed;
+  /* position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 9999;
+  z-index: 9999; */
 }
 
 .page-content {
@@ -396,27 +415,27 @@ export default {
 
 /* 夜间模式样式 */
 .page-container.night-mode {
-  background: #1a1a1a;
+  background: #23272f;
 }
 
 .page-container.night-mode .toolbar {
-  background: #2d2d2d;
-  border-bottom-color: #444;
-  color: #e0e0e0;
+  background: #2d333b;
+  border-bottom-color: #444c56;
+  color: #e3e6eb;
 }
 
 .page-container.night-mode .toolbar-btn,
 .page-container.night-mode .page-size-select {
-  background: #3d3d3d;
-  border-color: #555;
-  color: #e0e0e0;
+  background: #23272f;
+  border-color: #444c56;
+  color: #e3e6eb;
 }
 
 .page-container.night-mode .toolbar-btn:hover:not(:disabled) {
-  background: #4d4d4d;
+  background: #262c36;
 }
 
 .page-container.night-mode .page-info {
-  color: #e0e0e0;
+  color: #e3e6eb;
 }
 </style>

@@ -5,9 +5,10 @@ export class XMLParser {
   /**
    * 解析 XML 字符串
    * @param {string} xmlString - XML 字符串
+   * @param {string} prefix - 图片前缀
    * @returns {Object} 解析后的对象
    */
-  static parse(xmlString) {
+  static parse(xmlString, prefix) {
     const parser = new DOMParser()
     const xmlDoc = parser.parseFromString(xmlString, 'text/xml')
 
@@ -17,6 +18,7 @@ export class XMLParser {
       throw new Error('XML 解析失败')
     }
 
+    this.prefix = prefix || ''
     return this.parseNode(xmlDoc.documentElement)
   }
 
@@ -75,21 +77,60 @@ export class XMLParser {
     if (parsedData.tagName === 'body') {
       html += '<div class="article-body">'
       parsedData.children.forEach(child => {
-        if (child.tagName === 'p') {
-          html += `<p id="p-${child.attributes.id || ''}" class="paragraph">${child.content}</p>`
-        } else if (child.tagName === 'img') {
-          html += `<img src="${child.attributes.src || ''}" alt="${child.attributes.alt || ''}" class="article-image" />`
-        } else if (child.tagName === 'h1' || child.tagName === 'h2' || child.tagName === 'h3') {
-          html += `<${child.tagName} class="heading">${child.content}</${child.tagName}>`
-        }
+        html += this.toHTML(child)
       })
       html += '</div>'
     }
 
-    // 递归处理子节点
-    parsedData.children.forEach(child => {
-      html += this.toHTML(child)
-    })
+    // 处理 figure
+    if (parsedData.tagName === 'figure') {
+      const figureId = parsedData.attributes.id || ''
+      html += `<figure id="figure-${figureId}" class="article-figure">`
+
+      // 先处理image
+      const imageChild = parsedData.children.find(child => child.tagName === 'image')
+      if (imageChild) {
+        html += this.toHTML(imageChild)
+      }
+
+      // 再处理title（作为figcaption）
+      const titleChild = parsedData.children.find(child => child.tagName === 'title')
+      if (titleChild) {
+        html += `<figcaption class="figure-title">${titleChild.content}</figcaption>`
+      }
+
+      html += '</figure>'
+    }
+
+    // 处理 image
+    if (parsedData.tagName === 'image') {
+      const src = parsedData.attributes.href || ''
+      const placement = parsedData.attributes.placement || ''
+      const alt = parsedData.children.find(c => c.tagName === 'alt')?.content || ''
+
+      // 根据placement属性决定样式类
+      const placementClass = placement === 'break' ? 'image-break' : 'image-inline'
+
+      html += `<img src="${this.prefix}/${src}" alt="${alt}" class="article-image ${placementClass}" />`
+    }
+
+    // 处理 p
+    if (parsedData.tagName === 'p') {
+      const pId = parsedData.attributes.id || ''
+      html += `<p id="p-${pId}" class="paragraph">${parsedData.content}</p>`
+    }
+
+    // 处理 h1/h2/h3
+    if (["h1", "h2", "h3"].includes(parsedData.tagName)) {
+      html += `<${parsedData.tagName} class="heading">${parsedData.content}</${parsedData.tagName}>`
+    }
+
+    // 递归处理其它子节点
+    if (!['body', 'figure', 'image', 'p', 'h1', 'h2', 'h3', 'title'].includes(parsedData.tagName)) {
+      parsedData.children.forEach(child => {
+        html += this.toHTML(child)
+      })
+    }
 
     return html
   }

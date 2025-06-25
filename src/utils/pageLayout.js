@@ -15,6 +15,7 @@ export class PageLayout {
     this.margin = { top: 20, right: 20, bottom: 20, left: 20, unit: 'mm' }
     this.lineHeight = 1.5
     this.fontSize = 14
+    this.dpi = this.getDPI();
   }
 
   /**
@@ -43,8 +44,19 @@ export class PageLayout {
    * @returns {number} 像素值
    */
   mmToPx(mm) {
-    // 假设 96 DPI，1 英寸 = 25.4 毫米
-    return (mm * 96) / 25.4
+    return (mm * this.dpi) / 25.4
+  }
+
+  getDPI() {
+    const div = document.createElement('div');
+    div.style.width = '1in'; // 宽度设为1英寸
+    div.style.position = 'absolute';
+    div.style.top = '-100%'; // 移出视口避免干扰
+    document.body.appendChild(div);
+
+    const dpi = div.offsetWidth; // 返回宽度的像素值，即 DPI
+    document.body.removeChild(div);
+    return dpi;
   }
 
   /**
@@ -61,10 +73,20 @@ export class PageLayout {
 
   /**
    * 分页算法
-   * @param {string} htmlContent - HTML 内容
+   * @param {Object|string} content - 解析对象或 HTML 字符串
    * @returns {Array} 分页后的页面数组
    */
-  paginate(htmlContent) {
+  paginate(content) {
+    let htmlContent = ''
+    // 如果是解析对象，先转为 HTML
+    if (typeof content === 'object' && content !== null && content.tagName) {
+      // 动态引入 XMLParser，避免循环依赖
+      const { XMLParser } = require('./xmlParser')
+      htmlContent = XMLParser.toHTML(content)
+    } else {
+      htmlContent = content
+    }
+
     const pages = []
     const contentArea = this.getContentArea()
 
@@ -80,7 +102,6 @@ export class PageLayout {
       overflow: hidden;
     `
     tempContainer.innerHTML = htmlContent
-    document.body.appendChild(tempContainer)
 
     // 获取所有可分割的元素
     const elements = Array.from(tempContainer.children)
@@ -133,7 +154,6 @@ export class PageLayout {
       pages.push(this.createPage(currentPage))
     }
 
-    document.body.removeChild(tempContainer)
     return pages
   }
 
@@ -202,6 +222,10 @@ export class PageLayout {
     const height = this.mmToPx(pageSize.height)
 
     return `
+      img {
+        object-fit: contain;
+        break-inside: avoid;
+      }
       .page {
         width: ${width}px;
         height: ${height}px;
@@ -216,12 +240,12 @@ export class PageLayout {
       }
 
       .page-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 20px;
-        background: #f5f5f5;
-        min-height: 100vh;
+
+      }
+
+      .figure-title {
+        font-size: 14px;
+        text-align: center;
       }
 
       .article-title {
@@ -239,7 +263,9 @@ export class PageLayout {
       .article-image {
         max-width: 100%;
         height: auto;
-        margin: 10px 0;
+        margin: 3px 0;
+        object-fit: contain;
+        break-inside: avoid;
       }
 
       .heading {
