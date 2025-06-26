@@ -151,7 +151,7 @@ export class PageManager {
       }
 
       const { XMLParser } = await import('./xmlParser')
-      const parsedData = XMLParser.parse(xmlContent, fileInfo.prefix)
+      const parsedData = XMLParser.parse(xmlContent)
 
       fileInfo.content = parsedData
       fileInfo.loaded = true
@@ -168,7 +168,8 @@ export class PageManager {
    */
   async paginateContent(content, startElementIndex = 0, maxPages = Infinity) {
     const { XMLParser } = require('./xmlParser')
-    const htmlContent = XMLParser.toHTML(content, content.prefix || '', this.fileMap)
+    const fileInfo = this.xmlFiles[this.currentChapterIndex];
+    const htmlContent = XMLParser.toHTML(content, fileInfo.folderPath, this.fileMap)
 
     // 创建临时容器用于CSS分页
     const tempContainer = document.createElement('div')
@@ -231,7 +232,6 @@ export class PageManager {
         }
 
         .paragraph {
-          margin-bottom: 16px;
           text-align: justify;
           text-indent: 2em;
         }
@@ -359,7 +359,6 @@ export class PageManager {
         }
 
         .page-content .paragraph {
-          margin-bottom: 16px;
           text-align: justify;
           text-indent: 2em;
         }
@@ -559,7 +558,6 @@ export class PageManager {
       }
 
       .paragraph {
-        margin-bottom: 16px;
         text-align: justify;
         text-indent: 2em;
       }

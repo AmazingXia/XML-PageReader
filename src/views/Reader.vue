@@ -25,13 +25,6 @@
 
     <!-- 阅读器界面 -->
     <div v-else class="reader-interface">
-      <!-- 顶部信息栏 -->
-      <div class="info-bar">
-        <div class="file-info">
-          <span class="file-name">{{ currentFolderName }}</span>
-          <button @click="resetReader" class="reset-btn">返回文件夹选择</button>
-        </div>
-      </div>
       <!-- 页面查看器 -->
       <div class="page-viewer-wrapper">
         <PageViewer
@@ -39,6 +32,7 @@
           :xml-base-path="currentXmlBasePath"
           :xml-file-count="currentXmlFileCount"
           :start-file-index="currentStartFileIndex"
+          @resetReader="resetReader"
         />
       </div>
     </div>
@@ -217,44 +211,6 @@ export default {
   flex-direction: column;
   justify-content: flex-start;
   height: 100vh;
-}
-
-.info-bar {
-  flex: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.file-name {
-  font-size: 16px;
-  font-weight: 500;
-  color: #333;
-}
-
-.reset-btn {
-  background: #667eea;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.reset-btn:hover {
-  background: #5a6fd8;
 }
 
 .page-viewer-wrapper {

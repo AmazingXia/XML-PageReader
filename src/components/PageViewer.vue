@@ -3,6 +3,11 @@
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
+        <div class="file-info">
+          <span class="file-name">{{ currentFolderName }}</span>
+          <button @click="$emit('resetReader')" class="reset-btn">返回文件夹选择</button>
+        </div>
+
         <select v-model="currentPageSize" @change="onPageSizeChange" class="page-size-select">
           <option value="A4">A4</option>
           <option value="A5">A5</option>
@@ -36,6 +41,9 @@
         <button @click="nextPage" :disabled="isLastPageOfChapter() && !hasNextChapter()" class="toolbar-btn">
           下一页
         </button>
+        <div class="page-info">
+          第{{ getCurrentPage() }}页 / 共{{ totalPagesInChapter }}页
+        </div>
       </div>
     </div>
 
@@ -46,8 +54,10 @@
         class="reader-container"
         :class="{
           'fullscreen': isFullscreen,
-          'night-mode': isNightMode
+          'night-mode': isNightMode,
+          'spreads': pageCount > 1
         }"
+        :style="readerContainerStyle"
         @keydown="handleKeydown"
         tabindex="0"
       >
@@ -81,22 +91,79 @@ export default {
   },
   data() {
     return {
+      currentFolderName: '',
       pageManager: new PageManager(),
       currentChapterContent: '',
-      currentPageIndex: 0,
       currentPageSize: 'A4',
       pagesPerView: 2,
       isFullscreen: false,
       isNightMode: false,
       loading: false,
-      totalPages: 0,
-      columnWidth: 376,
-      columnGap: 74,
-      pageWidth: 450, // columnWidth + columnGap
-      currentScrollLeft: 0
+      columnGap: 70,
+      currentScrollLeft: 0,
+      currentPage: 1,
+      totalPagesInChapter: 0
     }
   },
   computed: {
+    columnWidth() {
+      const pageSize = this.pageManager.pageSizes[this.currentPageSize];
+      const columnWidth = this.pageManager.mmToPx(pageSize.width - this.pageManager.margin.right - this.pageManager.margin.left);
+      return columnWidth
+    },
+    padX() {
+      const padX = this.pageManager.mmToPx(this.pageManager.margin.right) + this.pageManager.mmToPx(this.pageManager.margin.left);
+      return padX
+    },
+    pageCount() {
+      return Number(this.pagesPerView) || 1;
+    },
+    pageWidth() {
+      // pageWidth: 450, // columnWidth + columnGap
+      const pageCount = Number(this.pagesPerView) || 1;
+      const totalWidth = this.columnWidth * pageCount + this.columnGap * (pageCount - 1) + this.padX;
+      return totalWidth
+    },
+    readerContainerStyle() {
+      const pageSize = this.pageManager.pageSizes[this.currentPageSize];
+      const pageHeight = this.pageManager.mmToPx(pageSize.height);
+      // const padding = `${this.pageManager.mmToPx(this.pageManager.margin.top) + 'px'} ${this.pageManager.mmToPx(this.pageManager.margin.right) + 'px'} !important`;
+      // console.log(`padding`, padding);
+
+      return {
+        width: this.pageWidth + 'px',
+        height: pageHeight + 'px',
+        margin: '20px auto !important',
+        padding: '20px 37px !important',
+        // padding: padding,
+
+        columnFill: 'auto',
+        columnGap:  this.columnGap + 'px',
+        columnWidth:  this.columnWidth + 'px',
+        // columnFill: this.pageCount > 1 ? 'auto' : null,
+        // columnGap: this.pageCount > 1 ?  this.columnGap: null,
+        // columnWidth: this.pageCount > 1 ?  this.columnWidth + 'px': null,
+      }
+
+      // .reader-container {
+      //     width: 900px;
+      //     height: 600px;
+      //     overflow: hidden;
+      //     margin: 0px !important;
+      //     padding: 20px 37px !important;
+      //     box-sizing: border-box;
+      //     max-width: inherit;
+      //     column-fill: auto;
+      //     column-gap: 74px;
+      //     column-width: 376px;
+      //     white-space: normal;
+      //     scroll-behavior: auto;
+      //   }
+    },
+
+    colWidth() {
+      return (this.pageWidth - this.columnGap - this.padX) / 2
+    }
   },
   watch: {
     content: {
@@ -134,13 +201,13 @@ export default {
       if (!this.content) {
         return
       }
+      this.currentFolderName = this.content.folderName || '';
+
       try {
         this.loading = true
         await this.pageManager.initializeFolderContent(this.content)
         this.pageManager.setPageSize(this.currentPageSize)
         this.pageManager.setPagesPerView(this.pagesPerView)
-        this.currentPageIndex = 0
-        this.currentScrollLeft = 0
         await this.loadCurrentChapter()
       } catch (error) {
         console.error('初始化阅读器失败:', error)
@@ -162,6 +229,7 @@ export default {
         }
 
         const content = await this.pageManager.loadXMLFile(fileInfo)
+
         if (!content) {
           this.currentChapterContent = ''
           return
@@ -169,9 +237,8 @@ export default {
 
         // 获取HTML内容
         const { XMLParser } = require('@/utils/xmlParser')
-        this.currentChapterContent = XMLParser.toHTML(content, content.prefix || '', this.pageManager.fileMap)
+        this.currentChapterContent = XMLParser.toHTML(content, fileInfo.folderPath, this.pageManager.fileMap)
 
-        // 计算总页数
         this.$nextTick(() => {
           this.calculateTotalPages()
           this.updatePageStyles()
@@ -190,11 +257,38 @@ export default {
       const reader = this.$refs.reader
       if (!reader) return
 
-      const content = reader.querySelector('.chapter-content')
-      if (!content) return
+      this.$nextTick(() => {
+        const content = reader.querySelector('.chapter-content')
+        if (!content) return
 
-      const totalWidth = content.scrollWidth
-      this.totalPages = Math.ceil(totalWidth / this.pageWidth)
+        const totalWidth = content.scrollWidth
+        this.totalPagesInChapter = Math.ceil(totalWidth / this.pageWidth)
+        console.log(`当前章节总页数: ${this.totalPagesInChapter}, 内容宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}`)
+      })
+    },
+
+    /**
+     * 获取当前页码
+     */
+    getCurrentPage() {
+      const reader = this.$refs.reader
+      if (!reader) return 1
+
+      const currentPage = Math.floor(reader.scrollLeft / this.pageWidth) + 1
+      return Math.max(1, Math.min(currentPage, this.totalPagesInChapter))
+    },
+
+    /**
+     * 跳转到指定页
+     */
+    goToPage(pageNumber) {
+      const reader = this.$refs.reader
+      if (!reader) return
+
+      const targetScrollLeft = (pageNumber - 1) * this.pageWidth
+      reader.scrollLeft = targetScrollLeft
+      this.currentScrollLeft = targetScrollLeft
+      this.currentPage = pageNumber
     },
 
     /**
@@ -283,21 +377,6 @@ export default {
       }
 
       const cssPaginationStyles = `
-        .reader-container {
-          width: 900px;
-          height: 600px;
-          overflow: hidden;
-          margin: 0px !important;
-          padding: 20px 37px !important;
-          box-sizing: border-box;
-          max-width: inherit;
-          column-fill: auto;
-          column-gap: 74px;
-          column-width: 376px;
-          white-space: normal;
-          scroll-behavior: auto;
-        }
-
         .chapter-content {
           width: 100%;
           height: 100%;
@@ -311,8 +390,6 @@ export default {
           padding: 0;
           margin: 0;
           text-align: justify;
-          break-inside: avoid;
-          page-break-inside: avoid;
         }
 
         .chapter-content h1,
@@ -331,17 +408,10 @@ export default {
           page-break-inside: avoid;
         }
 
-        .chapter-content .paragraph {
-          margin-bottom: 16px;
-          text-align: justify;
-          text-indent: 2em;
-        }
-
         .chapter-content .article-title {
           font-size: 24px;
           font-weight: bold;
-          margin-bottom: 20px;
-          color: #2c3e50;
+          margin-bottom: 12px;
           text-align: center;
         }
 
@@ -349,7 +419,6 @@ export default {
           font-size: 14px;
           color: #666;
           margin-top: 8px;
-          font-style: italic;
         }
 
         .chapter-content .heading {
@@ -391,26 +460,19 @@ export default {
       const reader = this.$refs.reader
       if (!reader) return
 
-      const newScrollLeft = reader.scrollLeft - this.pageWidth
+      const currentPage = this.getCurrentPage()
 
-      if (newScrollLeft >= 0) {
+      if (currentPage > 1) {
         // 当前章节内翻页
-        reader.scrollLeft = newScrollLeft
-        this.currentScrollLeft = newScrollLeft
-        this.currentPageIndex = Math.floor(newScrollLeft / this.pageWidth)
+        this.goToPage(currentPage - 1)
       } else if (this.pageManager.currentChapterIndex > 0) {
         // 切换到上一章节的最后一页
         this.pageManager.currentChapterIndex--
-        this.currentPageIndex = 0
-        this.currentScrollLeft = 0
         await this.loadCurrentChapter()
 
         // 滚动到上一章节的最后一页
         this.$nextTick(() => {
-          const maxScrollLeft = reader.scrollWidth - reader.clientWidth
-          reader.scrollLeft = maxScrollLeft
-          this.currentScrollLeft = maxScrollLeft
-          this.currentPageIndex = Math.floor(maxScrollLeft / this.pageWidth)
+          this.goToPage(this.totalPagesInChapter)
         })
       }
     },
@@ -422,25 +484,19 @@ export default {
       const reader = this.$refs.reader
       if (!reader) return
 
-      const newScrollLeft = reader.scrollLeft + this.pageWidth
-      const maxScrollLeft = reader.scrollWidth - reader.clientWidth
+      const currentPage = this.getCurrentPage()
 
-      if (newScrollLeft <= maxScrollLeft) {
+      if (currentPage < this.totalPagesInChapter) {
         // 当前章节内翻页
-        reader.scrollLeft = newScrollLeft
-        this.currentScrollLeft = newScrollLeft
-        this.currentPageIndex = Math.floor(newScrollLeft / this.pageWidth)
+        this.goToPage(currentPage + 1)
       } else if (this.pageManager.currentChapterIndex < this.pageManager.xmlFiles.length - 1) {
         // 切换到下一章节的第一页
         this.pageManager.currentChapterIndex++
-        this.currentPageIndex = 0
-        this.currentScrollLeft = 0
         await this.loadCurrentChapter()
 
         // 滚动到开始位置
         this.$nextTick(() => {
-          reader.scrollLeft = 0
-          this.currentScrollLeft = 0
+          this.goToPage(1)
         })
       }
     },
@@ -449,20 +505,16 @@ export default {
      * 跳转到首页
      */
     async goToFirstPage() {
-      const reader = this.$refs.reader
-      if (!reader) return
-
       if (this.pageManager.currentChapterIndex > 0) {
         // 回到第一章节
         this.pageManager.currentChapterIndex = 0
-        this.currentPageIndex = 0
-        this.currentScrollLeft = 0
         await this.loadCurrentChapter()
+        this.$nextTick(() => {
+          this.goToPage(1)
+        })
       } else {
         // 当前章节的第一页
-        reader.scrollLeft = 0
-        this.currentScrollLeft = 0
-        this.currentPageIndex = 0
+        this.goToPage(1)
       }
     },
 
@@ -560,11 +612,7 @@ export default {
     },
 
     isLastPageOfChapter() {
-      const reader = this.$refs.reader
-      if (!reader) return true
-
-      const maxScrollLeft = reader.scrollWidth - reader.clientWidth
-      return reader.scrollLeft >= maxScrollLeft
+      return this.getCurrentPage() >= this.totalPagesInChapter
     },
 
     hasNextChapter() {
@@ -572,7 +620,7 @@ export default {
     },
 
     isFirstPageOfAll() {
-      return this.currentPageIndex === 0 && this.pageManager.currentChapterIndex === 0
+      return this.getCurrentPage() === 1 && this.pageManager.currentChapterIndex === 0
     }
   }
 }
@@ -585,6 +633,33 @@ export default {
   background: #f5f5f5;
   flex: 1;
   overflow: hidden;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.file-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+.reset-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.reset-btn:hover {
+  background: #5a6fd8;
 }
 
 /* 确保toolbar样式优先级最高 */
@@ -699,53 +774,49 @@ export default {
   align-items: flex-start;
   background: #f5f5f5;
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .reader-container {
-  /* width: 900px;
-  height: 600px;
   overflow: hidden;
-  margin: 0 auto;
-  padding: 20px 37px !important;
-  box-sizing: border-box;
-  max-width: inherit;
-  column-fill: auto;
-  column-gap: 74px;
-  column-width: 376px;
-  white-space: normal;
-  scroll-behavior: auto;
   background: #f5f5f5;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  white-space: normal;
 }
 
 .reader-container.fullscreen {
-  position: fixed;
+  /* position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
   z-index: 9999;
-  background: #f5f5f5;
+  background: #f5f5f5; */
 }
 
-.chapter-content {
-  width: 100%;
-  height: 100%;
-  font-size: 16px;
-  line-height: 1.6;
-  font-family: 'Stix', serif;
-  font-variant-numeric: oldstyle-nums;
-  color: #333;
+.spreads {
+  position: relative;
+}
+
+
+.spreads:after {
+    position: absolute;
+    width: 1px;
+    border-right: 1px #000 solid;
+    height: 90%;
+    z-index: 100;
+    left: 50%;
+    margin-left: -1px;
+    top: 5%;
+    opacity: .15;
+    box-shadow: -2px 0 15px rgba(0, 0, 0, 1);
+    content: "";
 }
 
 .chapter-content p {
   padding: 0;
   margin: 0;
   text-align: justify;
-  break-inside: avoid;
-  page-break-inside: avoid;
 }
 
 .chapter-content h1 {
@@ -764,20 +835,6 @@ export default {
   padding: 3em 0 2em 0;
 }
 
-.chapter-content .article-title {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 20px;
-  color: #2c3e50;
-  text-align: center;
-}
-
-.chapter-content .paragraph {
-  margin-bottom: 16px;
-  text-align: justify;
-  text-indent: 2em;
-}
-
 .chapter-content .article-figure {
   margin: 20px 0;
   text-align: center;
@@ -789,7 +846,6 @@ export default {
   font-size: 14px;
   color: #666;
   margin-top: 8px;
-  font-style: italic;
 }
 
 .chapter-content .article-image {

@@ -5,10 +5,9 @@ export class XMLParser {
   /**
    * 解析 XML 字符串
    * @param {string} xmlString - XML 字符串
-   * @param {string} prefix - 图片前缀
    * @returns {Object} 解析后的对象
    */
-  static parse(xmlString, prefix) {
+  static parse(xmlString) {
     const parser = new DOMParser()
     const xmlDoc = parser.parseFromString(xmlString, 'text/xml')
 
@@ -18,7 +17,6 @@ export class XMLParser {
       throw new Error('XML 解析失败')
     }
 
-    this.prefix = prefix || ''
     return this.parseNode(xmlDoc.documentElement)
   }
 
@@ -61,7 +59,7 @@ export class XMLParser {
   /**
    * 将解析后的对象转换为 HTML
    * @param {Object} parsedData - 解析后的数据
-   * @param {string} prefix - 图片前缀
+   * @param {string} prefix - 当前章节的文件夹前缀（如'2-xml/8'）
    * @param {Object} fileMap - 文件映射（用于文件夹模式）
    * @returns {string} HTML 字符串
    */
@@ -113,19 +111,20 @@ export class XMLParser {
       // 根据placement属性决定样式类
       const placementClass = placement === 'break' ? 'image-break' : 'image-inline'
 
-      // 处理图片路径
-      let imageSrc = src
-      if (prefix) {
-        imageSrc = `${prefix}/${src}`
+      // 直接用prefix拼接src查fileMap
+      let imageSrc = ''
+      if (fileMap && prefix) {
+        const key = prefix.replace(/\/$/, '') + '/' + src.replace(/^\//, '');
+        console.log(`key`, key);
+
+        if (fileMap[key]) {
+          const file = fileMap[key]
+          const blobUrl = URL.createObjectURL(file)
+          imageSrc = blobUrl
+        }
       }
 
-      // 如果是文件夹模式且有文件映射，创建blob URL
-      if (fileMap && fileMap[imageSrc]) {
-        const file = fileMap[imageSrc]
-        const blobUrl = URL.createObjectURL(file)
-        imageSrc = blobUrl
-      }
-
+      // 如果找不到图片则不渲染
       html += `<img src="${imageSrc}" alt="${alt}" class="article-image ${placementClass}" />`
     }
 

@@ -13,7 +13,7 @@ npm install
 npm run serve
 ```
 
-项目将在 http://localhost:8080 启动
+项目将在 <http://localhost:8080> 启动
 
 ### 2. 使用说明
 
@@ -126,12 +126,14 @@ src/
 ```
 
 ### 核心技术
+
 - **Vue 2.6.14**: 响应式框架
 - **原生 JavaScript**: XML 解析和 DOM 操作
 - **CSS3**: 现代化样式和动画
 - **HTML5**: 语义化标签和 API
 
 ### 设计模式
+
 - **组件化设计**: 模块化和可复用
 - **工具类封装**: 功能解耦和测试友好
 - **响应式数据**: 数据驱动视图更新
@@ -140,16 +142,19 @@ src/
 ## 📊 性能优化
 
 ### 1. 渲染优化
+
 - 虚拟滚动减少 DOM 节点
 - 按需渲染页面内容
 - 图片懒加载支持
 
 ### 2. 内存管理
+
 - 及时清理临时 DOM 元素
 - 避免内存泄漏
 - 优化事件监听器
 
 ### 3. 用户体验
+
 - 平滑的页面切换动画
 - 响应式设计适配各种屏幕
 - 无障碍访问支持
@@ -157,6 +162,7 @@ src/
 ## 🔧 扩展性
 
 ### 1. 页面尺寸扩展
+
 ```javascript
 // 在 pageLayout.js 中添加新尺寸
 this.pageSizes = {
@@ -168,6 +174,7 @@ this.pageSizes = {
 ```
 
 ### 2. XML 标签扩展
+
 ```javascript
 // 在 xmlParser.js 中添加新标签处理
 if (child.tagName === 'table') {
@@ -176,6 +183,7 @@ if (child.tagName === 'table') {
 ```
 
 ### 3. 样式自定义
+
 ```javascript
 // 在 pageLayout.js 中自定义样式
 getPageStyles() {
@@ -190,6 +198,7 @@ getPageStyles() {
 ## 🎨 界面预览
 
 ### 文件选择界面
+
 - 现代化的渐变背景
 - 卡片式上传区域
 - 简洁的文件上传按钮
@@ -206,11 +215,13 @@ getPageStyles() {
 ## 🚀 部署说明
 
 ### 开发环境
+
 ```bash
 npm run serve
 ```
 
 ### 生产环境
+
 ```bash
 npm run build
 ```
@@ -228,6 +239,7 @@ npm run build
 5. ✅ **Vue2 实现**: 使用 Vue2 框架开发
 
 **加分项全部实现**:
+
 - ✅ 现代化 CSS 样式
 - ✅ 图片防截断
 - ✅ 全屏和夜间模式
