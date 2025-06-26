@@ -215,10 +215,12 @@ export default {
 .reader-interface {
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   height: 100vh;
 }
 
 .info-bar {
+  flex: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -258,5 +260,8 @@ export default {
 .page-viewer-wrapper {
   flex: 1;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 </style>

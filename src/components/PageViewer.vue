@@ -26,12 +26,8 @@
         </button>
       </div>
 
-      <div class="toolbar-center">
-        <span class="page-info">{{ currentPageIndex + 1 }}-{{ currentPageIndex + renderedPages.length }} / 总页数</span>
-      </div>
-
       <div class="toolbar-right">
-        <button @click="goToFirstPage" :disabled="currentPageIndex === 0" class="toolbar-btn">
+        <button @click="goToFirstPage" :disabled="isFirstPageOfAll()" class="toolbar-btn">
           首页
         </button>
         <button @click="prevPage" :disabled="isFirstPageOfAll()" class="toolbar-btn">
@@ -43,35 +39,30 @@
       </div>
     </div>
 
-    <!-- 页面容器 -->
-    <div
-      class="page-container"
-      :class="{
-        'fullscreen': isFullscreen,
-        'night-mode': isNightMode
-      }"
-      @keydown="handleKeydown"
-      tabindex="0"
-    >
-      <!-- 加载状态 -->
-      <div v-if="loading" class="loading">
-        <p>正在加载页面...</p>
-      </div>
+    <!-- 阅读器外层容器 -->
+    <div class="reader-outer">
+      <div
+        ref="reader"
+        class="reader-container"
+        :class="{
+          'fullscreen': isFullscreen,
+          'night-mode': isNightMode
+        }"
+        @keydown="handleKeydown"
+        tabindex="0"
+      >
+        <!-- 加载状态 -->
+        <div v-if="loading" class="loading">
+          <p>正在加载页面...</p>
+        </div>
 
-      <!-- 页面内容 -->
-      <div v-else-if="renderedPages.length > 0" class="pages-wrapper">
-        <div
-          v-for="page in renderedPages"
-          :key="page.globalPageIndex"
-          class="page"
-          v-html="page.content"
-        ></div>
-        <div v-if="pagesPerView === 2 && renderedPages.length === 1" class="page empty-page"></div>
-      </div>
+        <!-- 章节内容 -->
+        <div v-else-if="currentChapterContent" class="chapter-content" v-html="currentChapterContent"></div>
 
-      <!-- 无内容状态 -->
-      <div v-else class="no-content">
-        <p>暂无内容</p>
+        <!-- 无内容状态 -->
+        <div v-else class="no-content">
+          <p>暂无内容</p>
+        </div>
       </div>
     </div>
   </div>
@@ -91,16 +82,21 @@ export default {
   data() {
     return {
       pageManager: new PageManager(),
-      renderedPages: [],
+      currentChapterContent: '',
       currentPageIndex: 0,
       currentPageSize: 'A4',
       pagesPerView: 2,
       isFullscreen: false,
       isNightMode: false,
-      hasMorePages: true,
       loading: false,
-      totalPages: 0
+      totalPages: 0,
+      columnWidth: 376,
+      columnGap: 74,
+      pageWidth: 450, // columnWidth + columnGap
+      currentScrollLeft: 0
     }
+  },
+  computed: {
   },
   watch: {
     content: {
@@ -120,7 +116,8 @@ export default {
   beforeDestroy() {
     const stylesToRemove = [
       'dynamic-page-styles',
-      'night-mode-styles'
+      'night-mode-styles',
+      'css-pagination-styles'
     ]
     stylesToRemove.forEach(id => {
       const style = document.getElementById(id)
@@ -143,7 +140,8 @@ export default {
         this.pageManager.setPageSize(this.currentPageSize)
         this.pageManager.setPagesPerView(this.pagesPerView)
         this.currentPageIndex = 0
-        await this.renderCurrentPages()
+        this.currentScrollLeft = 0
+        await this.loadCurrentChapter()
       } catch (error) {
         console.error('初始化阅读器失败:', error)
       } finally {
@@ -152,27 +150,51 @@ export default {
     },
 
     /**
-     * 渲染当前页面
+     * 加载当前章节内容
      */
-    async renderCurrentPages() {
+    async loadCurrentChapter() {
       try {
         this.loading = true
-        const { pages, totalPages } = await this.pageManager.renderPages(this.currentPageIndex, this.pagesPerView);
+        const fileInfo = this.pageManager.xmlFiles[this.pageManager.currentChapterIndex]
+        if (!fileInfo) {
+          this.currentChapterContent = ''
+          return
+        }
 
-        console.log(`pages, totalPages`, pages, totalPages);
-        this.renderedPages = pages
-        this.totalPages = totalPages
-        this.hasMorePages = (this.currentPageIndex + this.pagesPerView) < this.totalPages
+        const content = await this.pageManager.loadXMLFile(fileInfo)
+        if (!content) {
+          this.currentChapterContent = ''
+          return
+        }
 
-        // 确保样式被正确应用
+        // 获取HTML内容
+        const { XMLParser } = require('@/utils/xmlParser')
+        this.currentChapterContent = XMLParser.toHTML(content, content.prefix || '', this.pageManager.fileMap)
+
+        // 计算总页数
         this.$nextTick(() => {
+          this.calculateTotalPages()
           this.updatePageStyles()
         })
       } catch (error) {
-        console.error('渲染页面失败:', error)
+        console.error('加载章节失败:', error)
       } finally {
         this.loading = false
       }
+    },
+
+    /**
+     * 计算总页数
+     */
+    calculateTotalPages() {
+      const reader = this.$refs.reader
+      if (!reader) return
+
+      const content = reader.querySelector('.chapter-content')
+      if (!content) return
+
+      const totalWidth = content.scrollWidth
+      this.totalPages = Math.ceil(totalWidth / this.pageWidth)
     },
 
     /**
@@ -188,6 +210,9 @@ export default {
       if (this.isNightMode) {
         this.injectNightModeStyles()
       }
+
+      // 添加 CSS 分页样式
+      this.injectCSSPaginationStyles()
     },
 
     /**
@@ -226,6 +251,18 @@ export default {
           color: #e0e0e0;
           box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
         }
+        .page-container.night-mode .page .page-content {
+          color: #e0e0e0;
+        }
+        .page-container.night-mode .page .article-title {
+          color: #f0f0f0;
+        }
+        .page-container.night-mode .page .heading {
+          color: #f0f0f0;
+        }
+        .page-container.night-mode .page .figure-title {
+          color: #ccc;
+        }
       `
 
       // 创建新的样式元素
@@ -236,11 +273,98 @@ export default {
     },
 
     /**
-     * 动态注入样式（保留兼容性）
+     * 注入 CSS 分页样式
      */
-    injectStyles(additionalStyles = '') {
-      // 这个方法现在只用于兼容性，实际使用新的分离方法
-      this.injectPageStyles(additionalStyles)
+    injectCSSPaginationStyles() {
+      // 移除之前的 CSS 分页样式
+      const existingStyle = document.getElementById('css-pagination-styles')
+      if (existingStyle) {
+        existingStyle.remove()
+      }
+
+      const cssPaginationStyles = `
+        .reader-container {
+          width: 900px;
+          height: 600px;
+          overflow: hidden;
+          margin: 0px !important;
+          padding: 20px 37px !important;
+          box-sizing: border-box;
+          max-width: inherit;
+          column-fill: auto;
+          column-gap: 74px;
+          column-width: 376px;
+          white-space: normal;
+          scroll-behavior: auto;
+        }
+
+        .chapter-content {
+          width: 100%;
+          height: 100%;
+          font-size: 16px;
+          line-height: 1.6;
+          font-family: 'Stix', serif;
+          font-variant-numeric: oldstyle-nums;
+        }
+
+        .chapter-content p {
+          padding: 0;
+          margin: 0;
+          text-align: justify;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .chapter-content h1,
+        .chapter-content h2,
+        .chapter-content h3,
+        .chapter-content h4,
+        .chapter-content h5,
+        .chapter-content h6 {
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+
+        .chapter-content .article-figure,
+        .chapter-content .article-image {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .chapter-content .paragraph {
+          margin-bottom: 16px;
+          text-align: justify;
+          text-indent: 2em;
+        }
+
+        .chapter-content .article-title {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          color: #2c3e50;
+          text-align: center;
+        }
+
+        .chapter-content .figure-title {
+          font-size: 14px;
+          color: #666;
+          margin-top: 8px;
+          font-style: italic;
+        }
+
+        .chapter-content .heading {
+          margin: 20px 0 12px 0;
+          color: #2c3e50;
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+      `
+
+      // 创建新的样式元素
+      const styleElement = document.createElement('style')
+      styleElement.id = 'css-pagination-styles'
+      styleElement.textContent = cssPaginationStyles
+      document.head.appendChild(styleElement)
     },
 
     /**
@@ -248,7 +372,8 @@ export default {
      */
     async onPageSizeChange() {
       this.pageManager.setPageSize(this.currentPageSize)
-      await this.renderCurrentPages()
+      this.updatePageStyles()
+      await this.loadCurrentChapter()
     },
 
     /**
@@ -256,27 +381,37 @@ export default {
      */
     async onPagesPerViewChange() {
       this.pageManager.setPagesPerView(this.pagesPerView)
-      await this.renderCurrentPages()
+      await this.loadCurrentChapter()
     },
 
     /**
      * 上一页
      */
     async prevPage() {
-      const prevPageIndex = this.currentPageIndex - this.pagesPerView;
-      if (prevPageIndex >= 0) {
-        this.currentPageIndex = prevPageIndex;
-        await this.renderCurrentPages();
-        this.focusContainer();
+      const reader = this.$refs.reader
+      if (!reader) return
+
+      const newScrollLeft = reader.scrollLeft - this.pageWidth
+
+      if (newScrollLeft >= 0) {
+        // 当前章节内翻页
+        reader.scrollLeft = newScrollLeft
+        this.currentScrollLeft = newScrollLeft
+        this.currentPageIndex = Math.floor(newScrollLeft / this.pageWidth)
       } else if (this.pageManager.currentChapterIndex > 0) {
-        this.pageManager.currentChapterIndex--;
-        const fileInfo = this.pageManager.xmlFiles[this.pageManager.currentChapterIndex];
-        const content = fileInfo.content;
-        const { pages: allPages } = this.pageManager.paginateContent(content, 0, Infinity);
-        const lastPageIndex = Math.max(0, allPages.length - this.pagesPerView);
-        this.currentPageIndex = lastPageIndex;
-        await this.renderCurrentPages();
-        this.focusContainer();
+        // 切换到上一章节的最后一页
+        this.pageManager.currentChapterIndex--
+        this.currentPageIndex = 0
+        this.currentScrollLeft = 0
+        await this.loadCurrentChapter()
+
+        // 滚动到上一章节的最后一页
+        this.$nextTick(() => {
+          const maxScrollLeft = reader.scrollWidth - reader.clientWidth
+          reader.scrollLeft = maxScrollLeft
+          this.currentScrollLeft = maxScrollLeft
+          this.currentPageIndex = Math.floor(maxScrollLeft / this.pageWidth)
+        })
       }
     },
 
@@ -284,21 +419,29 @@ export default {
      * 下一页
      */
     async nextPage() {
-      const fileInfo = this.pageManager.xmlFiles[this.pageManager.currentChapterIndex];
-      if (!fileInfo) return;
-      const content = fileInfo.content;
-      if (!content) return;
-      const { pages: allPages } = this.pageManager.paginateContent(content, 0, Infinity);
-      const nextPageIndex = this.currentPageIndex + this.pagesPerView;
-      if (nextPageIndex < allPages.length) {
-        this.currentPageIndex = nextPageIndex;
-        await this.renderCurrentPages();
-        this.focusContainer();
+      const reader = this.$refs.reader
+      if (!reader) return
+
+      const newScrollLeft = reader.scrollLeft + this.pageWidth
+      const maxScrollLeft = reader.scrollWidth - reader.clientWidth
+
+      if (newScrollLeft <= maxScrollLeft) {
+        // 当前章节内翻页
+        reader.scrollLeft = newScrollLeft
+        this.currentScrollLeft = newScrollLeft
+        this.currentPageIndex = Math.floor(newScrollLeft / this.pageWidth)
       } else if (this.pageManager.currentChapterIndex < this.pageManager.xmlFiles.length - 1) {
-        this.pageManager.currentChapterIndex++;
-        this.currentPageIndex = 0;
-        await this.renderCurrentPages();
-        this.focusContainer();
+        // 切换到下一章节的第一页
+        this.pageManager.currentChapterIndex++
+        this.currentPageIndex = 0
+        this.currentScrollLeft = 0
+        await this.loadCurrentChapter()
+
+        // 滚动到开始位置
+        this.$nextTick(() => {
+          reader.scrollLeft = 0
+          this.currentScrollLeft = 0
+        })
       }
     },
 
@@ -306,9 +449,21 @@ export default {
      * 跳转到首页
      */
     async goToFirstPage() {
-      this.currentPageIndex = 0
-      await this.renderCurrentPages()
-      this.focusContainer()
+      const reader = this.$refs.reader
+      if (!reader) return
+
+      if (this.pageManager.currentChapterIndex > 0) {
+        // 回到第一章节
+        this.pageManager.currentChapterIndex = 0
+        this.currentPageIndex = 0
+        this.currentScrollLeft = 0
+        await this.loadCurrentChapter()
+      } else {
+        // 当前章节的第一页
+        reader.scrollLeft = 0
+        this.currentScrollLeft = 0
+        this.currentPageIndex = 0
+      }
     },
 
     /**
@@ -398,25 +553,26 @@ export default {
      * 聚焦容器
      */
     focusContainer() {
-      const container = this.$el.querySelector('.page-container')
+      const container = this.$el.querySelector('.reader-container')
       if (container) {
         container.focus()
       }
     },
 
     isLastPageOfChapter() {
-      const fileInfo = this.pageManager.xmlFiles[this.pageManager.currentChapterIndex];
-      if (!fileInfo) return true;
-      const content = fileInfo.content;
-      if (!content) return true;
-      const { pages: allPages } = this.pageManager.paginateContent(content, 0, Infinity);
-      return this.currentPageIndex + this.pagesPerView >= allPages.length;
+      const reader = this.$refs.reader
+      if (!reader) return true
+
+      const maxScrollLeft = reader.scrollWidth - reader.clientWidth
+      return reader.scrollLeft >= maxScrollLeft
     },
+
     hasNextChapter() {
-      return this.pageManager.currentChapterIndex < this.pageManager.xmlFiles.length - 1;
+      return this.pageManager.currentChapterIndex < this.pageManager.xmlFiles.length - 1
     },
+
     isFirstPageOfAll() {
-      return this.currentPageIndex === 0 && this.pageManager.currentChapterIndex === 0;
+      return this.currentPageIndex === 0 && this.pageManager.currentChapterIndex === 0
     }
   }
 }
@@ -427,7 +583,8 @@ export default {
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
-  height: 100%;
+  flex: 1;
+  overflow: hidden;
 }
 
 /* 确保toolbar样式优先级最高 */
@@ -535,17 +692,35 @@ export default {
   font-weight: 500;
 }
 
-.page-container {
+.reader-outer {
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  flex: 1;
-  padding: 20px;
-  overflow: auto;
   background: #f5f5f5;
+  flex: 1;
+  overflow: hidden;
 }
 
-.page-container.fullscreen {
+.reader-container {
+  /* width: 900px;
+  height: 600px;
+  overflow: hidden;
+  margin: 0 auto;
+  padding: 20px 37px !important;
+  box-sizing: border-box;
+  max-width: inherit;
+  column-fill: auto;
+  column-gap: 74px;
+  column-width: 376px;
+  white-space: normal;
+  scroll-behavior: auto;
+  background: #f5f5f5;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); */
+}
+
+.reader-container.fullscreen {
   position: fixed;
   top: 0;
   left: 0;
@@ -555,19 +730,91 @@ export default {
   background: #f5f5f5;
 }
 
-.pages-wrapper {
-  display: flex;
-  gap: 20px;
-  justify-content: center;
-  align-items: flex-start;
+.chapter-content {
+  width: 100%;
+  height: 100%;
+  font-size: 16px;
+  line-height: 1.6;
+  font-family: 'Stix', serif;
+  font-variant-numeric: oldstyle-nums;
+  color: #333;
 }
 
-.page {
-  flex-shrink: 0;
-  background: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-radius: 4px;
-  overflow: hidden;
+.chapter-content p {
+  padding: 0;
+  margin: 0;
+  text-align: justify;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.chapter-content h1 {
+  font-size: 1.5em;
+  line-height: 1.33em;
+  text-align: center;
+  padding-bottom: 0em;
+  text-transform: uppercase;
+  font-weight: normal;
+  letter-spacing: 4px;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.chapter-content header {
+  padding: 3em 0 2em 0;
+}
+
+.chapter-content .article-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #2c3e50;
+  text-align: center;
+}
+
+.chapter-content .paragraph {
+  margin-bottom: 16px;
+  text-align: justify;
+  text-indent: 2em;
+}
+
+.chapter-content .article-figure {
+  margin: 20px 0;
+  text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.chapter-content .figure-title {
+  font-size: 14px;
+  color: #666;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.chapter-content .article-image {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.chapter-content .heading {
+  margin: 20px 0 12px 0;
+  color: #2c3e50;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.empty-page {
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  font-style: italic;
 }
 
 .no-content {
@@ -610,21 +857,32 @@ export default {
 }
 
 /* 夜间模式样式 */
-.page-container.night-mode {
+.reader-container.night-mode {
   background: #23272f;
 }
 
-.page-container.night-mode .page {
-  background: #2d2d2d;
+.reader-container.night-mode .chapter-content {
   color: #e0e0e0;
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.reader-container.night-mode .chapter-content .article-title {
+  color: #f0f0f0;
+}
+
+.reader-container.night-mode .chapter-content .heading {
+  color: #f0f0f0;
+}
+
+.reader-container.night-mode .chapter-content .figure-title {
+  color: #ccc;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .pages-wrapper {
-    flex-direction: column;
-    align-items: center;
+  .reader-container {
+    width: 100%;
+    height: 400px;
+    padding: 10px 20px !important;
   }
 
   .toolbar {

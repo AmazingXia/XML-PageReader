@@ -164,75 +164,160 @@ export class PageManager {
   }
 
   /**
-   * 分页算法
+   * 分页算法 - 使用CSS自动分页
    */
-  paginateContent(content, startElementIndex = 0, maxPages = Infinity) {
-    const contentArea = this.getContentArea()
+  async paginateContent(content, startElementIndex = 0, maxPages = Infinity) {
     const { XMLParser } = require('./xmlParser')
     const htmlContent = XMLParser.toHTML(content, content.prefix || '', this.fileMap)
 
+    // 创建临时容器用于CSS分页
     const tempContainer = document.createElement('div')
     tempContainer.style.cssText = `
       position: absolute;
       top: -9999px;
       left: -9999px;
-      width: ${contentArea.width}px;
+      width: ${this.mmToPx(this.getCurrentPageSize().width)}px;
+      height: ${this.mmToPx(this.getCurrentPageSize().height)}px;
+      overflow-y: hidden;
+      margin: 0px !important;
+      padding: ${this.mmToPx(this.margin.top)}px ${this.mmToPx(this.margin.right)}px ${this.mmToPx(this.margin.bottom)}px ${this.mmToPx(this.margin.left)}px !important;
+      box-sizing: border-box;
+      max-width: inherit;
+      column-fill: auto;
+      column-gap: 74px;
+      column-width: ${this.mmToPx(this.getCurrentPageSize().width - this.margin.left - this.margin.right)}px;
       font-size: ${this.fontSize}px;
       line-height: ${this.lineHeight};
-      overflow: hidden;
+      font-family: 'Stix', serif;
+      font-variant-numeric: oldstyle-nums;
     `
-    tempContainer.innerHTML = htmlContent
+
+    // 设置内容样式
+    tempContainer.innerHTML = `
+      <style>
+        body {
+          font-size: 1em;
+          line-height: 1.33em;
+          font-family: 'Stix', serif;
+          font-variant-numeric: oldstyle-nums;
+        }
+
+        header {
+          padding: 3em 0 2em 0;
+        }
+
+        h1 {
+          font-size: 1.5em;
+          line-height: 1.33em;
+          text-align: center;
+          padding-bottom: 0em;
+          text-transform: uppercase;
+          font-weight: normal;
+          letter-spacing: 4px;
+        }
+
+        p {
+          padding: 0;
+          margin: 0;
+          text-align: justify;
+        }
+
+        .article-title {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          color: #2c3e50;
+          text-align: center;
+        }
+
+        .paragraph {
+          margin-bottom: 16px;
+          text-align: justify;
+          text-indent: 2em;
+        }
+
+        .article-figure {
+          margin: 20px 0;
+          text-align: center;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .figure-title {
+          font-size: 14px;
+          color: #666;
+          margin-top: 8px;
+          font-style: italic;
+        }
+
+        .article-image {
+          max-width: 100%;
+          height: auto;
+          object-fit: contain;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .image-break {
+          display: block;
+          margin: 20px auto;
+        }
+
+        .image-inline {
+          display: inline-block;
+          margin: 0 8px;
+        }
+
+        .heading {
+          margin: 20px 0 12px 0;
+          color: #2c3e50;
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+      </style>
+      <div class="content-wrapper">
+        ${htmlContent}
+      </div>
+    `
+
     document.body.appendChild(tempContainer)
 
-    const pages = []
-    const elements = Array.from(tempContainer.children)
-    let currentPage = []
-    let currentHeight = 0
-    let i = startElementIndex
-    let pageCount = 0
+    // 等待浏览器渲染完成并计算页数
+    return new Promise((resolve) => {
+      // 使用 requestAnimationFrame 确保渲染完成
+      requestAnimationFrame(() => {
+        const contentWrapper = tempContainer.querySelector('.content-wrapper')
+        const totalHeight = contentWrapper.scrollHeight
+        const containerHeight = tempContainer.clientHeight
+        const totalPages = Math.ceil(totalHeight / containerHeight)
 
-    while (i < elements.length && pageCount < maxPages) {
-      const element = elements[i]
-      const elementHeight = element.offsetHeight
+        // 创建页面数据
+        const pages = []
+        const actualPages = Math.min(totalPages, maxPages)
 
-      if (currentHeight + elementHeight > contentArea.height) {
-        if (currentPage.length > 0) {
-          // 当前页已有内容，先保存当前页
-          pages.push(this.createPage(currentPage))
-          pageCount++
-          if (pageCount >= maxPages) break
-          currentPage = []
-          currentHeight = 0
-          // 不递增i，让下一个循环重新判断当前元素
-          continue
-        } else {
-          // 当前页为空，且单个元素就超高，单独成页
-          pages.push(this.createPage([element]))
-          pageCount++
-          if (pageCount >= maxPages) break
-          i++
-          continue
+        for (let i = 0; i < actualPages; i++) {
+          pages.push({
+            content: this.createPageContent(htmlContent),
+            elements: 1, // 每页作为一个整体
+            pageIndex: i,
+            totalPages: totalPages
+          })
         }
-      }
-      // 正常加入当前页
-      currentPage.push(element)
-      currentHeight += elementHeight
-      i++
-    }
 
-    if (currentPage.length > 0 && pageCount < maxPages) {
-      pages.push(this.createPage(currentPage))
-      i++
-    }
-
-    document.body.removeChild(tempContainer)
-    return { pages, nextElementIndex: i }
+        document.body.removeChild(tempContainer)
+        resolve({
+          pages,
+          nextElementIndex: startElementIndex + actualPages,
+          totalPages: totalPages
+        })
+      })
+    })
   }
 
   /**
-   * 创建页面
+   * 创建页面内容
    */
-  createPage(elements) {
+  createPageContent(htmlContent) {
     const pageDiv = document.createElement('div')
     pageDiv.className = 'page'
     pageDiv.style.cssText = `
@@ -244,16 +329,76 @@ export class PageManager {
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       margin: 10px;
       overflow: hidden;
+      font-size: ${this.fontSize}px;
+      line-height: ${this.lineHeight};
+      font-family: 'Stix', serif;
+      font-variant-numeric: oldstyle-nums;
     `
 
-    elements.forEach(element => {
-      pageDiv.appendChild(element.cloneNode(true))
-    })
+    // 添加内容，使用CSS分页
+    pageDiv.innerHTML = `
+      <style>
+        .page-content {
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+        }
 
-    return {
-      content: pageDiv.outerHTML,
-      elements: elements.length
-    }
+        .page-content p {
+          padding: 0;
+          margin: 0;
+          text-align: justify;
+        }
+
+        .page-content .article-title {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          color: #2c3e50;
+          text-align: center;
+        }
+
+        .page-content .paragraph {
+          margin-bottom: 16px;
+          text-align: justify;
+          text-indent: 2em;
+        }
+
+        .page-content .article-figure {
+          margin: 20px 0;
+          text-align: center;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .page-content .figure-title {
+          font-size: 14px;
+          color: #666;
+          margin-top: 8px;
+          font-style: italic;
+        }
+
+        .page-content .article-image {
+          max-width: 100%;
+          height: auto;
+          object-fit: contain;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .page-content .heading {
+          margin: 20px 0 12px 0;
+          color: #2c3e50;
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+      </style>
+      <div class="page-content">
+        ${htmlContent}
+      </div>
+    `
+
+    return pageDiv.outerHTML
   }
 
   /**
@@ -266,7 +411,7 @@ export class PageManager {
     const content = await this.loadXMLFile(fileInfo);
     if (!content) return { pages, totalPages: 0 };
     // 分页整个章节内容
-    const { pages: allPages } = this.paginateContent(content, 0, Infinity);
+    const { pages: allPages } = await this.paginateContent(content, 0, Infinity);
     // 取出当前页码起始的count页
     for (let i = 0; i < count; i++) {
       const idx = pageIndex + i;
@@ -291,7 +436,7 @@ export class PageManager {
     if (!fileInfo) return [];
     const content = await this.loadXMLFile(fileInfo);
     if (!content) return [];
-    const { pages: allPages } = this.paginateContent(content, 0, Infinity);
+    const { pages: allPages } = await this.paginateContent(content, 0, Infinity);
     let nextPageIndex = this.currentPageIndex + this.pagesPerView;
     if (nextPageIndex < allPages.length) {
       // 当前章节还有未渲染的页面
@@ -319,7 +464,7 @@ export class PageManager {
         this.currentChapterIndex--;
         const fileInfo = this.xmlFiles[this.currentChapterIndex];
         const content = await this.loadXMLFile(fileInfo);
-        const { pages: allPages } = this.paginateContent(content, 0, Infinity);
+        const { pages: allPages } = await this.paginateContent(content, 0, Infinity);
         const lastPageIndex = Math.max(0, allPages.length - this.pagesPerView);
         this.currentPageIndex = lastPageIndex;
         return await this.renderPages(lastPageIndex, this.pagesPerView);
@@ -368,6 +513,10 @@ export class PageManager {
         border-radius: 4px;
         overflow: hidden;
         flex-shrink: 0;
+        font-size: ${this.fontSize}px;
+        line-height: ${this.lineHeight};
+        font-family: 'Stix', serif;
+        font-variant-numeric: oldstyle-nums;
       }
 
       .page-content {
@@ -379,6 +528,26 @@ export class PageManager {
         line-height: ${this.lineHeight};
         color: #333;
         overflow: hidden;
+      }
+
+      .page-content p {
+        padding: 0;
+        margin: 0;
+        text-align: justify;
+      }
+
+      .page-content header {
+        padding: 3em 0 2em 0;
+      }
+
+      .page-content h1 {
+        font-size: 1.5em;
+        line-height: 1.33em;
+        text-align: center;
+        padding-bottom: 0em;
+        text-transform: uppercase;
+        font-weight: normal;
+        letter-spacing: 4px;
       }
 
       .article-title {

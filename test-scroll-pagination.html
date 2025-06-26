@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scroll 翻页测试</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+    }
+
+    .test-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .test-info {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .test-info h3 {
+      margin-top: 0;
+      color: #333;
+    }
+
+    .test-info ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+
+    .test-info li {
+      margin: 5px 0;
+      color: #666;
+    }
+
+    .demo-container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+
+    .demo-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .demo-toolbar-left,
+    .demo-toolbar-right {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .demo-toolbar-center {
+      flex: 1;
+      text-align: center;
+      font-weight: 500;
+      color: #495057;
+    }
+
+    .demo-btn {
+      padding: 8px 16px;
+      border: 1px solid #dee2e6;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .demo-btn:hover:not(:disabled) {
+      background: #e9ecef;
+      border-color: #adb5bd;
+    }
+
+    .demo-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .demo-select {
+      padding: 8px 12px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .demo-reader {
+      width: 900px;
+      height: 600px;
+      overflow-y: hidden;
+      overflow-x: auto;
+      margin: 0px !important;
+      padding: 20px 37px !important;
+      box-sizing: border-box;
+      max-width: inherit;
+      column-fill: auto;
+      column-gap: 74px;
+      column-width: 376px;
+      white-space: normal;
+      scroll-behavior: smooth;
+      background: #f5f5f5;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .demo-content {
+      width: 100%;
+      height: 100%;
+      font-size: 16px;
+      line-height: 1.6;
+      font-family: 'Stix', serif;
+      font-variant-numeric: oldstyle-nums;
+      color: #333;
+    }
+
+    .demo-content p {
+      padding: 0;
+      margin: 0;
+      text-align: justify;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .demo-content h1 {
+      font-size: 1.5em;
+      line-height: 1.33em;
+      text-align: center;
+      padding-bottom: 0em;
+      text-transform: uppercase;
+      font-weight: normal;
+      letter-spacing: 4px;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    .demo-content header {
+      padding: 3em 0 2em 0;
+    }
+
+    .demo-content .article-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #2c3e50;
+      text-align: center;
+    }
+
+    .demo-content .paragraph {
+      margin-bottom: 16px;
+      text-align: justify;
+      text-indent: 2em;
+    }
+
+    .demo-content .article-figure {
+      margin: 20px 0;
+      text-align: center;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .demo-content .figure-title {
+      font-size: 14px;
+      color: #666;
+      margin-top: 8px;
+      font-style: italic;
+    }
+
+    .demo-content .article-image {
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .demo-content .heading {
+      margin: 20px 0 12px 0;
+      color: #2c3e50;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-header">
+    <h1>Scroll 翻页测试</h1>
+  </div>
+
+  <div class="test-info">
+    <h3>测试说明</h3>
+    <ul>
+      <li>使用 scrollLeft 实现翻页功能，参考 444.html</li>
+      <li>容器尺寸：900px × 600px</li>
+      <li>列宽：376px，列间距：74px</li>
+      <li>页面宽度：450px (376 + 74)</li>
+      <li>支持章节间切换</li>
+      <li>平滑滚动效果</li>
+    </ul>
+  </div>
+
+  <div class="demo-container">
+    <div class="demo-toolbar">
+      <div class="demo-toolbar-left">
+        <select class="demo-select">
+          <option value="A4">A4</option>
+          <option value="A5">A5</option>
+          <option value="Letter">Letter</option>
+        </select>
+
+        <select class="demo-select">
+          <option value="1">1页</option>
+          <option value="2" selected>2页</option>
+        </select>
+
+        <button class="demo-btn">全屏</button>
+        <button class="demo-btn">夜间模式</button>
+      </div>
+
+      <div class="demo-toolbar-center">
+        第1章 第1页 / 共计算中...页 (共1章)
+      </div>
+
+      <div class="demo-toolbar-right">
+        <button class="demo-btn" disabled>首页</button>
+        <button class="demo-btn" disabled>上一页</button>
+        <button class="demo-btn">下一页</button>
+      </div>
+    </div>
+
+    <div id="reader" class="demo-reader">
+      <div class="demo-content">
+        <header>
+          <h1>Chapter 16. The Ship.</h1>
+        </header>
+        <p>In bed we concocted our plans for the morrow. But to my surprise and no small concern, Queequeg now gave me to understand, that he had been diligently consulting Yojo—the name of his black little god—and Yojo had told him two or three times over, and strongly insisted upon it everyway, that instead of our going together among the whaling-fleet in harbor, and in concert selecting our craft; instead of this, I say, Yojo earnestly enjoined that the selection of the ship should rest wholly with me, inasmuch as Yojo purposed befriending us; and, in order to do so, had already pitched upon a vessel, which, if left to myself, I, Ishmael, should infallibly light upon, for all the world as though it had turned out by chance; and in that vessel I must immediately ship myself, for the present irrespective of Queequeg.</p>
+        <p>I have forgotten to mention that, in many things, Queequeg placed great confidence in the excellence of Yojo's judgment and surprising forecast of things; and cherished Yojo with considerable esteem, as a rather good sort of god, who perhaps meant well enough upon the whole, but in all cases did not succeed in his benevolent designs.</p>
+        <p>Now, this plan of Queequeg's, or rather Yojo's, touching the selection of our craft; I did not like that plan at all. I had not a little relied upon Queequeg's sagacity to point out the whaler best fitted to carry us and our fortunes securely. But as all my remonstrances produced no effect upon Queequeg, I was obliged to acquiesce; and accordingly prepared to set about this business with a determined rushing sort of energy and vigor, that should quickly settle that trifling little affair. Next morning early, leaving Queequeg shut up with Yojo in our little bedroom—for it seemed that it was some sort of Lent or Ramadan, or day of fasting, humiliation, and prayer with Queequeg and Yojo that day; HOW it was I never could find out, for, though I applied myself to it several times, I never could master his liturgies and XXXIX Articles—leaving Queequeg, then, fasting on his tomahawk pipe, and Yojo warming himself at his sacrificial fire of shavings, I sallied out among the shipping. After much prolonged sauntering and many random inquiries, I learnt that there were three ships up for three-years' voyages—The Devil-dam, the Tit-bit, and the Pequod. DEVIL-DAM, I do not know the origin of; TIT-BIT is obvious; PEQUOD, you will no doubt remember, was the name of a celebrated tribe of Massachusetts Indians; now extinct as the ancient Medes. I peered and pryed about the Devil-dam; from her, hopped over to the Tit-bit; and finally, going on board the Pequod, looked around her for a moment, and then decided that this was the very ship for us.</p>
+        <p>You may have seen many a quaint craft in your day, for aught I know;—square-toed luggers; mountainous Japanese junks; butter-box galliots, and what not; but take my word for it, you never saw such a rare old craft as this same rare old Pequod. She was a ship of the old school, rather small if anything; with an old-fashioned claw-footed look about her. Long seasoned and weather-stained in the typhoons and calms of all four oceans, her old hull's complexion was darkened like a French grenadier's, who has alike fought in Egypt and Siberia. Her venerable bows looked bearded. Her masts—cut somewhere on the coast of Japan, where her original ones were lost overboard in a gale—her masts stood stiffly up like the spines of the three old kings of Cologne. Her ancient decks were worn and wrinkled, like the pilgrim-worshipped flag-stone in Canterbury Cathedral where Becket bled. But to all these her old antiquities, were added new and marvellous features, pertaining to the wild business that for more than half a century she had followed. Old Captain Peleg, many years her chief-mate, before he commanded another vessel of his own, and now a retired seaman, and one of the principal owners of the Pequod,—this old Peleg, during the term of his chief-mateship, had built upon her original grotesqueness, and inlaid it, all over, with a quaintness both of material and device, unmatched by anything except it be Thorkill-Hake's carved buckler or bedstead. She was apparelled like any barbaric Ethiopian emperor, his neck heavy with pendants of polished ivory. She was a thing of trophies. A cannibal of a craft, tricking herself forth in the chased bones of her enemies. All round, her unpanelled, open bulwarks were garnished like one continuous jaw, with the long sharp teeth of the sperm whale, inserted there for pins, to fasten her old hempen thews and tendons to. Those thews ran not through base blocks of land wood, but deftly travelled over sheaves of sea-ivory. Scorning a turnstile wheel at her reverend helm, she sported there a tiller; and that tiller was in one mass, curiously carved from the long narrow lower jaw of her hereditary foe. The helmsman who steered by that tiller in a tempest, felt like the Tartar, when he holds back his fiery steed by clutching its jaw. A noble craft, but somehow a most melancholy! All noble things are touched with that.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const reader = document.getElementById('reader');
+    const prevBtn = document.querySelector('.demo-btn:nth-last-child(2)');
+    const nextBtn = document.querySelector('.demo-btn:last-child');
+    const homeBtn = document.querySelector('.demo-btn:nth-last-child(3)');
+    const pageInfo = document.querySelector('.demo-toolbar-center');
+
+    const columnWidth = 376;
+    const columnGap = 74;
+    const pageWidth = columnWidth + columnGap;
+
+    let currentPage = 1;
+    let totalPages = 0;
+
+    // 计算总页数
+    function calculateTotalPages() {
+      const content = reader.querySelector('.demo-content');
+      const totalWidth = content.scrollWidth;
+      totalPages = Math.ceil(totalWidth / pageWidth);
+      updatePageInfo();
+    }
+
+    // 更新页面信息
+    function updatePageInfo() {
+      pageInfo.textContent = `第1章 第${currentPage}页 / 共${totalPages}页 (共1章)`;
+    }
+
+    // 更新按钮状态
+    function updateButtonStates() {
+      homeBtn.disabled = currentPage === 1;
+      prevBtn.disabled = currentPage === 1;
+      nextBtn.disabled = currentPage >= totalPages;
+    }
+
+    // 上一页
+    prevBtn.addEventListener('click', () => {
+      if (currentPage > 1) {
+        reader.scrollLeft -= pageWidth;
+        currentPage--;
+        updatePageInfo();
+        updateButtonStates();
+      }
+    });
+
+    // 下一页
+    nextBtn.addEventListener('click', () => {
+      if (currentPage < totalPages) {
+        reader.scrollLeft += pageWidth;
+        currentPage++;
+        updatePageInfo();
+        updateButtonStates();
+      }
+    });
+
+    // 首页
+    homeBtn.addEventListener('click', () => {
+      reader.scrollLeft = 0;
+      currentPage = 1;
+      updatePageInfo();
+      updateButtonStates();
+    });
+
+    // 监听滚动事件
+    reader.addEventListener('scroll', () => {
+      const newPage = Math.floor(reader.scrollLeft / pageWidth) + 1;
+      if (newPage !== currentPage) {
+        currentPage = newPage;
+        updatePageInfo();
+        updateButtonStates();
+      }
+    });
+
+    // 键盘事件
+    document.addEventListener('keydown', (event) => {
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          prevBtn.click();
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          nextBtn.click();
+          break;
+        case 'Home':
+          event.preventDefault();
+          homeBtn.click();
+          break;
+      }
+    });
+
+    // 页面加载完成后计算页数
+    window.addEventListener('load', () => {
+      calculateTotalPages();
+      updateButtonStates();
+
+      console.log('总宽度:', reader.querySelector('.demo-content').scrollWidth, 'px');
+      console.log('容器宽度:', reader.clientWidth, 'px');
+      console.log('页面宽度:', pageWidth, 'px');
+      console.log('总页数:', totalPages);
+    });
+  </script>
+</body>
+</html>
