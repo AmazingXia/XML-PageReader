@@ -115,7 +115,6 @@ export class XMLParser {
       let imageSrc = ''
       if (fileMap && prefix) {
         const key = prefix.replace(/\/$/, '') + '/' + src.replace(/^\//, '');
-        console.log(`key`, key);
 
         if (fileMap[key]) {
           const file = fileMap[key]

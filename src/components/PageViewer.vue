@@ -42,7 +42,7 @@
           下一页
         </button>
         <div class="page-info">
-          第{{ getCurrentPage() }}页 / 共{{ totalPagesInChapter }}页
+          第{{ currentPage }}页 / 共{{ totalBookPages }}页
         </div>
       </div>
     </div>
@@ -67,7 +67,7 @@
         </div>
 
         <!-- 章节内容 -->
-        <div v-else-if="currentChapterContent" class="chapter-content" v-html="currentChapterContent"></div>
+        <div v-else-if="currentChapterContent" class="chapter-content" v-html="currentChapterContent" :style="chapterContentStyle"></div>
 
         <!-- 无内容状态 -->
         <div v-else class="no-content">
@@ -102,7 +102,8 @@ export default {
       columnGap: 70,
       currentScrollLeft: 0,
       currentPage: 1,
-      totalPagesInChapter: 0
+      totalSpreads: 0,
+      totalBookPages: 0
     }
   },
   computed: {
@@ -137,9 +138,9 @@ export default {
         padding: '20px 37px !important',
         // padding: padding,
 
-        columnFill: 'auto',
-        columnGap:  this.columnGap + 'px',
-        columnWidth:  this.columnWidth + 'px',
+        // columnFill: 'auto',
+        // columnGap:  this.columnGap + 'px',
+        // columnWidth:  this.columnWidth + 'px',
         // columnFill: this.pageCount > 1 ? 'auto' : null,
         // columnGap: this.pageCount > 1 ?  this.columnGap: null,
         // columnWidth: this.pageCount > 1 ?  this.columnWidth + 'px': null,
@@ -163,6 +164,13 @@ export default {
 
     colWidth() {
       return (this.pageWidth - this.columnGap - this.padX) / 2
+    },
+    chapterContentStyle() {
+      return {
+        columnFill: 'auto',
+        columnGap: this.columnGap + 'px',
+        columnWidth: this.columnWidth + 'px',
+      }
     }
   },
   watch: {
@@ -220,11 +228,12 @@ export default {
      * 加载当前章节内容
      */
     async loadCurrentChapter() {
+      this.loading = true
       try {
-        this.loading = true
         const fileInfo = this.pageManager.xmlFiles[this.pageManager.currentChapterIndex]
         if (!fileInfo) {
           this.currentChapterContent = ''
+          this.loading = false
           return
         }
 
@@ -232,50 +241,71 @@ export default {
 
         if (!content) {
           this.currentChapterContent = ''
+          this.loading = false
           return
         }
 
         // 获取HTML内容
         const { XMLParser } = require('@/utils/xmlParser')
-        this.currentChapterContent = XMLParser.toHTML(content, fileInfo.folderPath, this.pageManager.fileMap)
+        this.currentChapterContent = XMLParser.toHTML(content, fileInfo.folderPath, this.pageManager.fileMap);
+        this.updatePageStyles();
 
-        this.$nextTick(() => {
-          this.calculateTotalPages()
-          this.updatePageStyles()
-        })
+        // 关键：先设置loading为false，等待DOM更新，再进行计算
+        this.loading = false;
+        await this.$nextTick();
+
+        await this.calculateTotalPages();
+
+        // 仅在双页模式下补空白页，保证总页数为偶数
+        if (this.pagesPerView == 2 && this.totalBookPages % 2 !== 0) {
+          this.currentChapterContent += '<div class="empty-page"></div>';
+          await this.$nextTick();
+          await this.calculateTotalPages();
+        }
       } catch (error) {
         console.error('加载章节失败:', error)
-      } finally {
         this.loading = false
       }
     },
 
     /**
-     * 计算总页数
+     * 等待.chapter-content渲染到DOM
      */
-    calculateTotalPages() {
-      const reader = this.$refs.reader
-      if (!reader) return
-
-      this.$nextTick(() => {
-        const content = reader.querySelector('.chapter-content')
-        if (!content) return
-
-        const totalWidth = content.scrollWidth
-        this.totalPagesInChapter = Math.ceil(totalWidth / this.pageWidth)
-        console.log(`当前章节总页数: ${this.totalPagesInChapter}, 内容宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}`)
-      })
+    waitForContentDom() {
+      return new Promise((resolve) => {
+        const tryFind = () => {
+          const reader = this.$refs.reader;
+          if (reader) {
+            const content = reader.querySelector('.chapter-content');
+            if (content) {
+              resolve(content);
+              return;
+            }
+          }
+          setTimeout(tryFind, 16);
+        };
+        tryFind();
+      });
     },
 
     /**
-     * 获取当前页码
+     * 计算总页数
      */
-    getCurrentPage() {
-      const reader = this.$refs.reader
-      if (!reader) return 1
+    async calculateTotalPages() {
+      const content = await this.waitForContentDom();
+      const totalWidth = content.scrollWidth;
 
-      const currentPage = Math.floor(reader.scrollLeft / this.pageWidth) + 1
-      return Math.max(1, Math.min(currentPage, this.totalPagesInChapter))
+      // The number of scrollable spreads for navigation
+      this.totalSpreads = Math.ceil(totalWidth / this.pageWidth);
+
+      // The actual number of book pages (columns) for display and layout logic
+      if (this.columnWidth > 0) {
+        this.totalBookPages = Math.round((totalWidth + this.columnGap) / (this.columnWidth + this.columnGap));
+      } else {
+        this.totalBookPages = 0;
+      }
+
+      console.log(`当前章节总页数: ${this.totalBookPages}, 总Spread数: ${this.totalSpreads}, 内容宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}`);
     },
 
     /**
@@ -284,11 +314,11 @@ export default {
     goToPage(pageNumber) {
       const reader = this.$refs.reader
       if (!reader) return
-
-      const targetScrollLeft = (pageNumber - 1) * this.pageWidth
+      const page = Math.max(1, Math.min(pageNumber, this.totalSpreads))
+      const targetScrollLeft = (page - 1) * this.pageWidth
       reader.scrollLeft = targetScrollLeft
       this.currentScrollLeft = targetScrollLeft
-      this.currentPage = pageNumber
+      this.currentPage = page
     },
 
     /**
@@ -378,7 +408,6 @@ export default {
 
       const cssPaginationStyles = `
         .chapter-content {
-          width: 100%;
           height: 100%;
           font-size: 16px;
           line-height: 1.6;
@@ -459,21 +488,16 @@ export default {
     async prevPage() {
       const reader = this.$refs.reader
       if (!reader) return
-
-      const currentPage = this.getCurrentPage()
-
-      if (currentPage > 1) {
+      if (this.currentPage > 1) {
         // 当前章节内翻页
-        this.goToPage(currentPage - 1)
+        this.goToPage(this.currentPage - 1)
       } else if (this.pageManager.currentChapterIndex > 0) {
         // 切换到上一章节的最后一页
         this.pageManager.currentChapterIndex--
-        await this.loadCurrentChapter()
-
-        // 滚动到上一章节的最后一页
-        this.$nextTick(() => {
-          this.goToPage(this.totalPagesInChapter)
-        })
+        await this.loadCurrentChapter();
+        // 直接赋值为上一章节最后一页
+        this.currentPage = this.totalSpreads
+        this.goToPage(this.currentPage)
       }
     },
 
@@ -483,17 +507,13 @@ export default {
     async nextPage() {
       const reader = this.$refs.reader
       if (!reader) return
-
-      const currentPage = this.getCurrentPage()
-
-      if (currentPage < this.totalPagesInChapter) {
+      if (this.currentPage < this.totalSpreads) {
         // 当前章节内翻页
-        this.goToPage(currentPage + 1)
+        this.goToPage(this.currentPage + 1)
       } else if (this.pageManager.currentChapterIndex < this.pageManager.xmlFiles.length - 1) {
         // 切换到下一章节的第一页
         this.pageManager.currentChapterIndex++
         await this.loadCurrentChapter()
-
         // 滚动到开始位置
         this.$nextTick(() => {
           this.goToPage(1)
@@ -612,7 +632,7 @@ export default {
     },
 
     isLastPageOfChapter() {
-      return this.getCurrentPage() >= this.totalPagesInChapter
+      return this.currentPage >= this.totalSpreads
     },
 
     hasNextChapter() {
@@ -620,7 +640,7 @@ export default {
     },
 
     isFirstPageOfAll() {
-      return this.getCurrentPage() === 1 && this.pageManager.currentChapterIndex === 0
+      return this.currentPage === 1 && this.pageManager.currentChapterIndex === 0
     }
   }
 }
@@ -850,7 +870,11 @@ export default {
 
 .chapter-content .article-image {
   max-width: 100%;
+  max-height: 90%;
   height: auto;
+  width: auto;
+  display: block;
+  margin: 0 auto;
   object-fit: contain;
   break-inside: avoid;
   page-break-inside: avoid;
@@ -864,13 +888,11 @@ export default {
 }
 
 .empty-page {
-  background: #f8f9fa;
-  border: 2px dashed #dee2e6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6c757d;
-  font-style: italic;
+  min-height: 1px;
+  min-width: 1px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  background: transparent;
 }
 
 .no-content {
