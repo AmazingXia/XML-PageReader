@@ -103,9 +103,14 @@ export class PageManager {
 
     this.xmlFiles = []
     this.fileMap = fileMap // 存储文件映射供后续使用
+    // 过滤掉根目录，只保留包含 result.xml 的章节文件夹
+    const chapterFolders = folderRoots.filter(folder => {
+      const resultXmlPath = `${folder}/result.xml`
+      return fileMap[resultXmlPath] && folder !== '1-xml'
+    })
 
     // 按顺序处理每个子目录
-    const sortedFolders = folderRoots.sort((a, b) => {
+    const sortedFolders = chapterFolders.sort((a, b) => {
       const aIndex = parseInt(a.split('/')[1])
       const bIndex = parseInt(b.split('/')[1])
       return aIndex - bIndex
@@ -142,12 +147,10 @@ export class PageManager {
         const file = this.fileMap[fileInfo.path]
         xmlContent = await file.text()
       } else {
-        // 从服务器读取
-        const response = await fetch(fileInfo.path)
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        xmlContent = await response.text()
+        // 文件不存在于 fileMap 中，这不应该发生
+        console.error(`文件不存在于 fileMap 中: ${fileInfo.path}`)
+        console.log('可用的文件:', Object.keys(this.fileMap || {}))
+        throw new Error(`文件不存在: ${fileInfo.path}`)
       }
 
       const { XMLParser } = await import('./xmlParser')
