@@ -48,7 +48,31 @@
     </div>
 
     <!-- 阅读器外层容器 -->
-    <div class="reader-outer">
+    <div class="reader-outer" :class="{ 'with-nav': showChapterNav }">
+      <!-- 章节导航面板 -->
+      <div class="chapter-nav" :class="{ 'expanded': showChapterNav }">
+        <button @click="toggleChapterNav" class="chapter-nav-toggle">
+          <span v-if="!showChapterNav">📖</span>
+          <span v-else>✕</span>
+        </button>
+
+        <div v-if="showChapterNav" class="chapter-list">
+          <h3>章节列表</h3>
+          <div class="chapter-items">
+            <div
+              v-for="(fileInfo, index) in pageManager.xmlFiles"
+              :key="fileInfo.index"
+              @click="goToChapter(index)"
+              class="chapter-item"
+              :class="{ 'active': index === pageManager.currentChapterIndex }"
+            >
+              <span class="chapter-number">第{{ fileInfo.index }}章</span>
+              <span class="chapter-status" v-if="index === pageManager.currentChapterIndex">当前</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div
         class="reader-container"
         :class="{
@@ -108,6 +132,7 @@ export default {
       currentPage: 1,
       totalPagesInChapter: 0,
       totalSpreads: 0,
+      showChapterNav: false,
     }
   },
   computed: {
@@ -667,6 +692,30 @@ export default {
 
     isFirstPageOfAll() {
       return this.currentPage === 1 && this.pageManager.currentChapterIndex === 0
+    },
+
+    /**
+     * 切换章节导航面板
+     */
+    toggleChapterNav() {
+      this.showChapterNav = !this.showChapterNav
+    },
+
+    /**
+     * 跳转到指定章节
+     */
+    async goToChapter(index) {
+      if (index === this.pageManager.currentChapterIndex) {
+        return
+      }
+
+      this.pageManager.currentChapterIndex = index
+      await this.loadCurrentChapter()
+
+      // 跳转到章节第一页
+      this.$nextTick(() => {
+        this.goToPage(1)
+      })
     }
   }
 }
@@ -827,11 +876,102 @@ export default {
   background: #f5f5f5;
   flex: 1;
   overflow: auto;
+  position: relative;
+  transition: padding-left 0.3s ease;
 }
 
-.chapter-wrapper {
-  height: 100%;
-  width: 100%;
+.reader-outer.with-nav {
+  padding-left: 170px;
+}
+
+.chapter-nav {
+  position: absolute;
+  top: 12px;
+  left: 22px;
+  width: 140px;
+  height: calc(100% - 24px);
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 10px;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.chapter-nav.expanded {
+  transform: translateX(-18px);
+}
+
+.chapter-nav-toggle {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  width: 30px;
+  height: 30px;
+  background: white;
+  border: none;
+  border-radius: 0 8px 8px 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.chapter-nav-toggle:hover {
+  background-color: #f0f0f0;
+}
+
+.chapter-list h3 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 6px;
+}
+
+.chapter-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chapter-item {
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.chapter-item:hover {
+  background-color: #f5f5f5;
+}
+
+.chapter-item.active {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.chapter-number {
+  font-size: 12px;
+}
+
+.chapter-status {
+  font-size: 10px;
+  color: #666;
+  background: #e8f5e8;
+  color: #2e7d32;
+  padding: 1px 4px;
+  border-radius: 6px;
 }
 
 .reader-container {
@@ -1002,5 +1142,10 @@ export default {
     width: 100%;
     justify-content: center;
   }
+}
+
+.chapter-wrapper {
+  height: 100%;
+  width: 100%;
 }
 </style>
