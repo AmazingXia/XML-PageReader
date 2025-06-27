@@ -56,20 +56,26 @@
           'night-mode': isNightMode,
           'spreads': pageCount > 1
         }"
+        :style="paddingStyle"
         @keydown="handleKeydown"
       >
         <!-- 加载状态 -->
-        <div v-if="loading" class="loading">
+        <div v-if="loading" class="loading" :style="readerContainerStyle">
           <p>正在加载页面...</p>
         </div>
 
-        <div v-else-if="currentChapterContent" ref="reader" class="content-container" :style="readerContainerStyle">
+        <div
+          v-else-if="currentChapterContent"
+          ref="reader"
+          class="content-container"
+          :style="readerContainerStyle"
+        >
           <div class="chapter-wrapper" :style="chapterWrapperStyle">
             <div class="chapter-content" v-html="currentChapterContent" :style="chapterContentStyle"> </div>
           </div>
         </div>
         <!-- 无内容状态 -->
-        <div v-else class="no-content">
+        <div v-else class="no-content" :style="readerContainerStyle">
           <p>暂无内容</p>
         </div>
       </div>
@@ -138,7 +144,6 @@ export default {
     },
 
     chapterWrapperStyle() {
-      // 直接使用已经调整好的 totalSpreads
       if (this.totalSpreads <= 2) {
         return {}
       }
@@ -148,9 +153,10 @@ export default {
       if (this.pagesPerView > 1 && adjustedSpreads % this.pagesPerView !== 0) {
         adjustedSpreads += 1;
       }
-
       // 计算调整后倍数所需要的宽度
       const adjustedWidth = adjustedSpreads * this.columnWidth + (adjustedSpreads - 1) * this.columnGap;
+
+      // console.log(`adjustedSpreads`, adjustedSpreads)
 
       return {
         width: adjustedWidth + 'px',
@@ -164,9 +170,13 @@ export default {
       }
     },
 
-    colWidth() {
-      return (this.pageWidth - this.columnGap - this.padX) / 2
+    paddingStyle() {
+      const padding = `${this.pageManager.mmToPx(this.pageManager.margin.top)}px ${this.pageManager.mmToPx(this.pageManager.margin.right)}px ${this.pageManager.mmToPx(this.pageManager.margin.bottom)}px ${this.pageManager.mmToPx(this.pageManager.margin.left)}px`;
+      return {
+        padding
+      }
     },
+
     chapterContentStyle() {
       return {
         columnFill: 'auto',
@@ -265,16 +275,16 @@ export default {
     },
 
     /**
-     * 等待.chapter-content渲染到DOM
+     * 等待.chapter-wrapper渲染到DOM
      */
-    waitForContentDom() {
+    waitForWrapperDom() {
       return new Promise((resolve) => {
         const tryFind = () => {
           const reader = this.$refs.reader;
           if (reader) {
-            const content = reader.querySelector('.chapter-content');
-            if (content) {
-              resolve(content);
+            const wrapper = reader.querySelector('.chapter-wrapper');
+            if (wrapper) {
+              resolve(wrapper);
               return;
             }
           }
@@ -288,14 +298,23 @@ export default {
      * 计算总页数
      */
     async calculateTotalPages() {
-      const content = await this.waitForContentDom();
-      const totalWidth = content.scrollWidth;
-      this.totalPagesInChapter = Math.ceil(totalWidth / this.pageWidth);
+      const wrapper = await this.waitForWrapperDom();
+      const totalWidth = wrapper.scrollWidth;
+
+      // 添加容差判断，当内容宽度非常接近页面宽度时，算作1页
+      const tolerance = 5; // 5px的容差
+      const ratio = totalWidth / this.pageWidth;
+
+      if (ratio <= 1 + tolerance / this.pageWidth) {
+        this.totalPagesInChapter = 1;
+      } else {
+        this.totalPagesInChapter = Math.ceil(ratio);
+      }
 
       // 计算基础的分栏数
       this.totalSpreads = Math.ceil(totalWidth / (this.columnWidth + this.columnGap));
 
-      console.log(`当前章节总页数: ${this.totalPagesInChapter}, 栏数: ${this.totalSpreads}, 内容宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}`);
+      console.log(`当前章节总页数: ${this.totalPagesInChapter}, 栏数: ${this.totalSpreads}, 内容宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}, 比例: ${ratio.toFixed(3)}`);
     },
 
     /**
@@ -462,6 +481,14 @@ export default {
       this.pageManager.setPageSize(this.currentPageSize)
       this.updatePageStyles()
       await this.loadCurrentChapter()
+
+      // 重新计算当前页面位置并设置正确的滚动位置
+      this.$nextTick(() => {
+        // 确保当前页面在有效范围内
+        const maxPage = this.totalPagesInChapter;
+        const currentPage = Math.min(this.currentPage, maxPage);
+        this.goToPage(currentPage);
+      });
     },
 
     /**
@@ -470,6 +497,14 @@ export default {
     async onPagesPerViewChange() {
       this.pageManager.setPagesPerView(this.pagesPerView)
       await this.loadCurrentChapter()
+
+      // 重新计算当前页面位置并设置正确的滚动位置
+      this.$nextTick(() => {
+        // 确保当前页面在有效范围内
+        const maxPage = this.totalPagesInChapter;
+        const currentPage = Math.min(this.currentPage, maxPage);
+        this.goToPage(currentPage);
+      });
     },
 
     /**
@@ -638,6 +673,11 @@ export default {
 </script>
 
 <style scoped>
+
+.content-container {
+  overflow: hidden;
+  /* overflow: auto; */
+}
 .page-viewer {
   display: flex;
   flex-direction: column;
@@ -794,13 +834,12 @@ export default {
   width: 100%;
 }
 
-.content-container {
-  /* overflow: hidden; */
-  overflow: auto;
+.reader-container {
   background: #f5f5f5;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   white-space: normal;
+  overflow: hidden;
 }
 
 .reader-container.fullscreen {
