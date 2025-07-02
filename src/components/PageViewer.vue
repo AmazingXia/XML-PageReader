@@ -231,7 +231,7 @@ export default {
   methods: {
     updateContainerWidth() {
       this.containerWidth = window.innerWidth;
-      this.refreshPage()
+      this.onPageSizeChange()
     },
     /**
      * 初始化阅读器
