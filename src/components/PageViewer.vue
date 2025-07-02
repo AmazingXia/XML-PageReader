@@ -30,6 +30,7 @@
           <span v-else>日间模式</span>
         </button>
       </div>
+      {{ scale }}
 
       <div class="toolbar-right">
         <button @click="goToFirstPage" :disabled="isFirstPageOfAll()" class="toolbar-btn">
@@ -80,8 +81,10 @@
           'night-mode': isNightMode,
           'spreads': pageCount > 1
         }"
-        :style="paddingStyle"
+        :style="[paddingStyle]"
         @keydown="handleKeydown"
+        tabindex="0"
+        ref="readerContainer"
       >
         <!-- 加载状态 -->
         <div v-if="loading" class="loading" :style="readerContainerStyle">
@@ -133,75 +136,74 @@ export default {
       totalPagesInChapter: 0,
       totalSpreads: 0,
       showChapterNav: false,
+      containerWidth: window.innerWidth,
     }
   },
   computed: {
+    availableWidth() {
+      const navWidth = 170 + 20;
+      return this.containerWidth - (this.showChapterNav ? navWidth : 70);
+    },
+    scale() {
+      const pageSize = this.pageManager.pageSizes[this.currentPageSize];
+      const rawColumnWidth = this.pageManager.mmToPx(pageSize.width - this.pageManager.margin.right - this.pageManager.margin.left);
+      const rawColumnGap = this.pageManager.mmToPx(this.pageManager.margin.right + this.pageManager.margin.left);
+      const pageCount = Number(this.pagesPerView) || 1;
+      const rawPageWidth = rawColumnWidth * pageCount + rawColumnGap * (3 - 1);
+      return Math.min(1, this.availableWidth / rawPageWidth);
+    },
     columnGap() {
-      const columnGap = this.pageManager.mmToPx(this.pageManager.margin.right + this.pageManager.margin.left);
-      return columnGap
+      const rawGap = this.pageManager.mmToPx(this.pageManager.margin.right + this.pageManager.margin.left);
+      const columnGap = rawGap * this.scale;
+      return columnGap;
     },
     columnWidth() {
       const pageSize = this.pageManager.pageSizes[this.currentPageSize];
-      const columnWidth = this.pageManager.mmToPx(pageSize.width - this.pageManager.margin.right - this.pageManager.margin.left);
-      return columnWidth
+      const rawWidth = this.pageManager.mmToPx(pageSize.width - this.pageManager.margin.right - this.pageManager.margin.left);
+      const columnWidth = rawWidth * this.scale;
+      return columnWidth;
     },
     columnHeight() {
       const pageSize = this.pageManager.pageSizes[this.currentPageSize];
-      const columnHeight = this.pageManager.mmToPx(pageSize.height - this.pageManager.margin.top - this.pageManager.margin.bottom);
-      return columnHeight
-    },
-    padX() {
-      const padX = this.pageManager.mmToPx(this.pageManager.margin.right) + this.pageManager.mmToPx(this.pageManager.margin.left);
-      return padX
+      const rawHeight = this.pageManager.mmToPx(pageSize.height - this.pageManager.margin.top - this.pageManager.margin.bottom);
+      return rawHeight * this.scale;
     },
     pageCount() {
       return Number(this.pagesPerView) || 1;
     },
     pageWidth() {
-      const pageCount = Number(this.pagesPerView) || 1;
-      const totalWidth = this.columnWidth * pageCount + this.columnGap * (pageCount - 1);
-      return totalWidth
+      return this.columnWidth * this.pageCount + this.columnGap * (this.pageCount - 1);
     },
     moveWidth() {
-      const pageCount = Number(this.pagesPerView) || 1;
-      const totalWidth = this.columnWidth * pageCount + this.columnGap * pageCount;
-      return totalWidth
+      return this.columnWidth * this.pageCount + this.columnGap * this.pageCount;
     },
-
+    paddingStyle() {
+      const padTop = this.pageManager.mmToPx(this.pageManager.margin.top) * this.scale;
+      const padRight = this.pageManager.mmToPx(this.pageManager.margin.right) * this.scale;
+      const padBottom = this.pageManager.mmToPx(this.pageManager.margin.bottom) * this.scale;
+      const padLeft = this.pageManager.mmToPx(this.pageManager.margin.left) * this.scale;
+      const padding = `${padTop}px ${padRight}px ${padBottom}px ${padLeft}px`;
+      return { padding };
+    },
     chapterWrapperStyle() {
       if (this.totalSpreads <= 2) {
         return {}
       }
-
       let adjustedSpreads = this.totalSpreads;
-
       if (this.pagesPerView > 1 && adjustedSpreads % this.pagesPerView !== 0) {
         adjustedSpreads += 1;
       }
-      // 计算调整后倍数所需要的宽度
       const adjustedWidth = adjustedSpreads * this.columnWidth + (adjustedSpreads - 1) * this.columnGap;
-
-      // console.log(`adjustedSpreads`, adjustedSpreads)
-
       return {
         width: adjustedWidth + 'px',
       }
     },
-
     readerContainerStyle() {
       return {
         width: this.pageWidth + 'px',
         height: this.columnHeight + 'px',
       }
     },
-
-    paddingStyle() {
-      const padding = `${this.pageManager.mmToPx(this.pageManager.margin.top)}px ${this.pageManager.mmToPx(this.pageManager.margin.right)}px ${this.pageManager.mmToPx(this.pageManager.margin.bottom)}px ${this.pageManager.mmToPx(this.pageManager.margin.left)}px`;
-      return {
-        padding
-      }
-    },
-
     chapterContentStyle() {
       return {
         columnFill: 'auto',
@@ -224,6 +226,8 @@ export default {
     this.$nextTick(() => {
       this.updatePageStyles()
     })
+    window.addEventListener('resize', this.updateContainerWidth);
+    document.addEventListener('keydown', this.handleGlobalKeydown)
   },
   beforeDestroy() {
     const stylesToRemove = [
@@ -237,8 +241,14 @@ export default {
         style.remove()
       }
     })
+    window.removeEventListener('resize', this.updateContainerWidth);
+    document.removeEventListener('keydown', this.handleGlobalKeydown)
   },
   methods: {
+    updateContainerWidth() {
+      this.containerWidth = window.innerWidth;
+      this.refreshPage()
+    },
     /**
      * 初始化阅读器
      */
@@ -507,6 +517,11 @@ export default {
       this.updatePageStyles()
       await this.loadCurrentChapter()
 
+      this.refreshPage()
+    },
+
+
+    refreshPage() {
       // 重新计算当前页面位置并设置正确的滚动位置
       this.$nextTick(() => {
         // 确保当前页面在有效范围内
@@ -676,7 +691,7 @@ export default {
      * 聚焦容器
      */
     focusContainer() {
-      const container = this.$el.querySelector('.reader-container')
+      const container = this.$refs.readerContainer
       if (container) {
         container.focus()
       }
@@ -698,7 +713,10 @@ export default {
      * 切换章节导航面板
      */
     toggleChapterNav() {
-      this.showChapterNav = !this.showChapterNav
+      this.showChapterNav = !this.showChapterNav;
+      this.$nextTick(() => {
+        this.updateContainerWidth();
+      });
     },
 
     /**
@@ -716,6 +734,31 @@ export default {
       this.$nextTick(() => {
         this.goToPage(1)
       })
+    },
+
+    // 添加全局键盘事件监听器
+    handleGlobalKeydown(event) {
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault()
+          this.prevPage()
+          break
+        case 'ArrowRight':
+          event.preventDefault()
+          this.nextPage()
+          break
+        case 'Home':
+          event.preventDefault()
+          this.goToFirstPage()
+          break
+        case 'f':
+        case 'F':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            this.toggleFullscreen()
+          }
+          break
+      }
     }
   }
 }
@@ -869,7 +912,8 @@ export default {
 
 .reader-outer {
   width: 100%;
-  padding: 12px;
+  padding: 16px 0;
+  padding-left: 22px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -881,7 +925,7 @@ export default {
 }
 
 .reader-outer.with-nav {
-  padding-left: 170px;
+  padding-left: 140px;
 }
 
 .chapter-nav {
@@ -980,6 +1024,12 @@ export default {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   white-space: normal;
   overflow: hidden;
+  outline: none;
+  margin: 0 auto;
+}
+
+.reader-container:focus {
+  outline-offset: 2px;
 }
 
 .reader-container.fullscreen {
