@@ -30,7 +30,6 @@
           <span v-else>日间模式</span>
         </button>
       </div>
-      {{ scale }}
 
       <div class="toolbar-right">
         <button @click="goToFirstPage" :disabled="isFirstPageOfAll()" class="toolbar-btn">
@@ -221,7 +220,6 @@ export default {
     }
   },
   mounted() {
-    this.updatePageStyles()
     this.focusContainer()
     this.$nextTick(() => {
       this.updatePageStyles()
@@ -230,17 +228,6 @@ export default {
     document.addEventListener('keydown', this.handleGlobalKeydown)
   },
   beforeDestroy() {
-    const stylesToRemove = [
-      'dynamic-page-styles',
-      'night-mode-styles',
-      'css-pagination-styles'
-    ]
-    stylesToRemove.forEach(id => {
-      const style = document.getElementById(id)
-      if (style) {
-        style.remove()
-      }
-    })
     window.removeEventListener('resize', this.updateContainerWidth);
     document.removeEventListener('keydown', this.handleGlobalKeydown)
   },
@@ -369,11 +356,6 @@ export default {
      * 更新页面样式
      */
     updatePageStyles() {
-      const pageStyles = this.pageManager.getPageStyles()
-
-      // 注入页面样式
-      this.injectPageStyles(pageStyles)
-
       // 添加夜间模式样式
       if (this.isNightMode) {
         this.injectNightModeStyles()
@@ -381,23 +363,6 @@ export default {
 
       // 添加 CSS 分页样式
       this.injectCSSPaginationStyles()
-    },
-
-    /**
-     * 注入页面样式
-     */
-    injectPageStyles(pageStyles) {
-      // 移除之前的页面样式
-      const existingStyle = document.getElementById('dynamic-page-styles')
-      if (existingStyle) {
-        existingStyle.remove()
-      }
-
-      // 创建新的样式元素
-      const styleElement = document.createElement('style')
-      styleElement.id = 'dynamic-page-styles'
-      styleElement.textContent = pageStyles
-      document.head.appendChild(styleElement)
     },
 
     /**
@@ -411,24 +376,19 @@ export default {
       }
 
       const nightModeStyles = `
-        .page-container.night-mode {
+        .reader-container.night-mode {
           background: #23272f;
         }
-        .page-container.night-mode .page {
-          background: #2d2d2d;
-          color: #e0e0e0;
-          box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
-        }
-        .page-container.night-mode .page .page-content {
+        .reader-container.night-mode .chapter-content {
           color: #e0e0e0;
         }
-        .page-container.night-mode .page .article-title {
+        .reader-container.night-mode .chapter-content .article-title {
           color: #f0f0f0;
         }
-        .page-container.night-mode .page .heading {
+        .reader-container.night-mode .chapter-content .heading {
           color: #f0f0f0;
         }
-        .page-container.night-mode .page .figure-title {
+        .reader-container.night-mode .chapter-content .figure-title {
           color: #ccc;
         }
       `
@@ -479,6 +439,15 @@ export default {
         .chapter-content .article-image {
           break-inside: avoid;
           page-break-inside: avoid;
+          max-width: 100%;
+          max-height: 90%;
+          height: auto;
+          width: auto;
+          display: block;
+          margin: 0 auto;
+          object-fit: contain;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
 
         .chapter-content .article-title {
@@ -492,6 +461,8 @@ export default {
           font-size: 14px;
           color: #666;
           margin-top: 8px;
+          font-style: italic;
+          text-align: center;
         }
 
         .chapter-content .heading {
@@ -648,16 +619,6 @@ export default {
      */
     toggleNightMode() {
       this.isNightMode = !this.isNightMode
-
-      if (this.isNightMode) {
-        this.injectNightModeStyles()
-      } else {
-        // 移除夜间模式样式
-        const nightModeStyle = document.getElementById('night-mode-styles')
-        if (nightModeStyle) {
-          nightModeStyle.remove()
-        }
-      }
     },
 
     /**
@@ -765,6 +726,13 @@ export default {
 </script>
 
 <style scoped>
+.chapter-content {
+  height: 100%;
+  font-size: 16px;
+  line-height: 1.6;
+  font-family: 'Stix', serif;
+  font-variant-numeric: oldstyle-nums;
+}
 
 .content-container {
   overflow: hidden;
@@ -1093,6 +1061,8 @@ export default {
   font-size: 14px;
   color: #666;
   margin-top: 8px;
+  font-style: italic;
+  text-align: center;
 }
 
 .chapter-content .article-image {
@@ -1112,6 +1082,15 @@ export default {
   color: #2c3e50;
   break-after: avoid;
   page-break-after: avoid;
+}
+
+.chapter-content .image-break {
+  display: block;
+  margin: 20px auto;
+}
+.chapter-content .image-inline {
+  display: inline-block;
+  margin: 0 8px;
 }
 
 .no-content {
