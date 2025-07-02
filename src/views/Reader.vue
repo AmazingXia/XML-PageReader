@@ -20,6 +20,9 @@
             选择 XML 文件夹
           </button>
         </div>
+        <div class="download-link">
+          <a href="/xml.zip" download>下载示例 XML 文件夹 (xml.zip)</a>
+        </div>
       </div>
     </div>
 
