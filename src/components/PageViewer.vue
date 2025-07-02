@@ -189,9 +189,6 @@ export default {
         return {}
       }
       let adjustedSpreads = this.totalSpreads;
-      if (this.pagesPerView > 1 && adjustedSpreads % this.pagesPerView !== 0) {
-        adjustedSpreads += 1;
-      }
       const adjustedWidth = adjustedSpreads * this.columnWidth + (adjustedSpreads - 1) * this.columnGap;
       return {
         width: adjustedWidth + 'px',
@@ -321,11 +318,18 @@ export default {
      */
     async calculateTotalPages() {
       const wrapper = await this.waitForWrapperDom();
-      const totalWidth = wrapper.scrollWidth;
+      const columnGap = this.columnGap * (this.pageCount - 1)
+      const totalWidth = wrapper.scrollWidth + columnGap;
+      const columnWidth = this.columnWidth + columnGap;
+      let adjustedSpreads =  Math.round(totalWidth / columnWidth);
 
-      this.totalPagesInChapter = Math.round(totalWidth / this.pageWidth);
-      this.totalSpreads = Math.round(totalWidth / (this.columnWidth + this.columnGap));
-      console.log(`当前章节总页数: ${this.totalPagesInChapter}, 栏数: ${this.totalSpreads}, 总宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}`);
+      if (this.pagesPerView > 1 && adjustedSpreads % this.pagesPerView !== 0) {
+        adjustedSpreads += 1;
+      }
+      this.totalSpreads = adjustedSpreads
+      this.totalPagesInChapter = adjustedSpreads / this.pagesPerView;
+      console.log(`当前章节总页数: ${this.totalPagesInChapter}, 栏数: ${this.totalSpreads}, 总宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}, 一栏宽度: ${columnWidth}`);
+      // console.log('栏数=====>', totalWidth / columnWidth);
     },
 
     /**
@@ -715,17 +719,17 @@ export default {
 </script>
 
 <style scoped>
+
+.content-container {
+  overflow: hidden;
+  /* overflow: auto; */
+}
 .chapter-content {
   height: 100%;
   font-size: 16px;
   line-height: 1.6;
   font-family: 'Stix', serif;
   font-variant-numeric: oldstyle-nums;
-}
-
-.content-container {
-  overflow: hidden;
-  /* overflow: auto; */
 }
 .page-viewer {
   display: flex;
@@ -773,6 +777,7 @@ export default {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 100;
   position: relative;
+  user-select: none;
 }
 
 .page-viewer .toolbar-left,
