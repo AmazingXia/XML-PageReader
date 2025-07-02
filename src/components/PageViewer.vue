@@ -323,20 +323,9 @@ export default {
       const wrapper = await this.waitForWrapperDom();
       const totalWidth = wrapper.scrollWidth;
 
-      // 添加容差判断，当内容宽度非常接近页面宽度时，算作1页
-      const tolerance = 5; // 5px的容差
-      const ratio = totalWidth / this.pageWidth;
-
-      if (ratio <= 1 + tolerance / this.pageWidth) {
-        this.totalPagesInChapter = 1;
-      } else {
-        this.totalPagesInChapter = Math.ceil(ratio);
-      }
-
-      // 计算基础的分栏数
-      this.totalSpreads = Math.ceil(totalWidth / (this.columnWidth + this.columnGap));
-
-      console.log(`当前章节总页数: ${this.totalPagesInChapter}, 栏数: ${this.totalSpreads}, 内容宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}, 比例: ${ratio.toFixed(3)}`);
+      this.totalPagesInChapter = Math.round(totalWidth / this.pageWidth);
+      this.totalSpreads = Math.round(totalWidth / (this.columnWidth + this.columnGap));
+      console.log(`当前章节总页数: ${this.totalPagesInChapter}, 栏数: ${this.totalSpreads}, 总宽度: ${totalWidth}, 页面宽度: ${this.pageWidth}`);
     },
 
     /**
